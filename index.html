@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BarberLink — La plateforme des barbiers de La Réunion</title>
+  <meta name="description" content="Trouvez, comparez et réservez votre barbier en 3 clics. Plateforme multi-salons pour La Réunion." />
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✂</text></svg>" />
+  <style>
+    body { margin: 0; background: #0c0804; }
+    #root { min-height: 100vh; }
+    /* Minimal flash prevention */
+    * { box-sizing: border-box; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <!-- React + ReactDOM from CDN -->
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <!-- Babel for JSX transpilation in-browser -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <!-- Mock window.storage if not available in this environment -->
+  <script>
+    if (!window.storage) {
+      const _store = {};
+      window.storage = {
+        get: function(key) {
+          if (!(key in _store)) throw new Error('Key not found: ' + key);
+          return _store[key];
+        },
+        set: function(key, val) {
+          _store[key] = val;
+        },
+        delete: function(key) {
+          delete _store[key];
+        },
+        list: function() {
+          return Object.keys(_store);
+        }
+      };
+    }
+  </script>
+
+  <!-- Main App -->
+  <script type="text/babel" data-presets="react" src="./App.jsx"></script>
+
+  <script type="text/babel" data-presets="react">
+    const { createRoot } = ReactDOM;
+    const root = createRoot(document.getElementById('root'));
+    root.render(React.createElement(App.default || App));
+  </script>
+</body>
+</html>
