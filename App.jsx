@@ -183,9 +183,12 @@ function promoLabel(promo) {
   return promo.type === 'eur' ? `−${promo.reduction} €` : `−${promo.reduction} %`;
 }
 
-// Paiement — chaque salon peut activer le paiement en ligne via un lien de
-// paiement (Stripe Payment Link, PayPlug, SumUp…). Aucun serveur requis : le
-// client est redirigé vers la page sécurisée du prestataire.
+// Paiement — chaque salon peut activer le paiement en ligne de deux façons :
+//  • « lien »  : un lien de paiement à montant fixe (Stripe Payment Link,
+//                PayPlug, SumUp…). Aucun serveur, mais montant figé.
+//  • « auto » : une petite fonction serverless crée une session Stripe
+//                Checkout au montant EXACT de la prestation. Encaissement
+//                automatique, montant dynamique.
 const PAIEMENT_PROVIDERS = {
   stripe:  { id: 'stripe',  nom: 'Stripe',  modes: 'CB · Visa · Mastercard · Apple Pay · Google Pay' },
   payplug: { id: 'payplug', nom: 'PayPlug', modes: 'CB · Visa · Mastercard · Apple Pay' },
@@ -195,9 +198,13 @@ const PAIEMENT_PROVIDERS = {
 // Renvoie la config de paiement normalisée d'un salon
 function getPaiement(salon) {
   const p = salon?.paiement || {};
+  const methode = p.methode || (p.fnUrl ? 'auto' : 'lien'); // rétro-compat
+  const configOk = methode === 'auto' ? !!p.fnUrl : !!p.lien;
   return {
-    active: !!p.active && !!p.lien,
+    active: !!p.active && configOk,
+    methode,                         // 'lien' | 'auto'
     lien: p.lien || '',
+    fnUrl: p.fnUrl || '',            // URL de la fonction serverless (mode auto)
     provider: p.provider || 'stripe',
     mode: p.mode || 'acompte',      // 'acompte' (% à la résa) ou 'total'
     acompte: p.acompte != null ? p.acompte : 30, // % d'acompte
@@ -982,7 +989,8 @@ function SalonCard({ salon, note, onSelect, index, hasDispo }) {
 // (redirige vers le lien sécurisé du prestataire) sinon « Paiement sur place ».
 function PaiementBox({ salon, rdv }) {
   const pai = getPaiement(salon);
-  const [done, setDone] = useState(false);
+  const [state, setState] = useState('idle'); // idle | loading | done | error
+  const [err, setErr] = useState('');
 
   if (!pai.active) {
     return (
@@ -995,16 +1003,42 @@ function PaiementBox({ salon, rdv }) {
   const prov = PAIEMENT_PROVIDERS[pai.provider] || PAIEMENT_PROVIDERS.stripe;
   const aPayer = montantEnLigne(rdv.prix, pai);
   const reste = rdv.prix - aPayer;
+  const label = `${rdv.prestation || 'Prestation'}${rdv.barbier ? ' — ' + rdv.barbier : ''} · ${salon.nom}`;
 
-  function payer() {
+  async function payer() {
+    // Mode automatique : la fonction serverless crée une session Checkout au montant exact
+    if (pai.methode === 'auto') {
+      setState('loading'); setErr('');
+      try {
+        const base = window.location.origin + window.location.pathname;
+        const res = await fetch(pai.fnUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            amount: aPayer,
+            label,
+            rdvId: rdv.id,
+            email: rdv.clientEmail || '',
+            successUrl: base + '?paiement=ok',
+            cancelUrl: base + '?paiement=annule',
+          }),
+        });
+        if (!res.ok) throw new Error('Le serveur de paiement a répondu ' + res.status);
+        const data = await res.json();
+        if (!data.url) throw new Error(data.error || 'Lien de paiement introuvable');
+        window.location.href = data.url; // redirection vers Stripe Checkout
+      } catch (e) {
+        setState('error'); setErr(e.message || 'Erreur de connexion');
+      }
+      return;
+    }
+    // Mode lien fixe : on ouvre le lien de paiement du prestataire
     let url = pai.lien;
-    // On transmet la référence du RDV + l'e-mail pour faciliter le suivi côté prestataire
     const sep = url.includes('?') ? '&' : '?';
     const params = [`client_reference_id=${encodeURIComponent(rdv.id)}`];
     if (rdv.clientEmail) params.push(`prefilled_email=${encodeURIComponent(rdv.clientEmail)}`);
-    url = url + sep + params.join('&');
-    window.open(url, '_blank', 'noopener');
-    setDone(true);
+    window.open(url + sep + params.join('&'), '_blank', 'noopener');
+    setState('done');
   }
 
   return (
@@ -1020,14 +1054,21 @@ function PaiementBox({ salon, rdv }) {
           Acompte de {pai.acompte} % maintenant — il restera <strong style={{ color: 'var(--cream-dim)' }}>{reste} €</strong> à régler sur place.
         </p>
       )}
-      {done ? (
+      {state === 'done' ? (
         <p style={{ color: 'var(--success)', textAlign: 'center', fontWeight: 600, margin: '6px 0' }}>
           ✓ Page de paiement {prov.nom} ouverte dans un nouvel onglet
         </p>
       ) : (
-        <button className="btn btn-b" style={{ width: '100%' }} onClick={payer}>
-          <Icon name="external" size={15} /> Payer {aPayer} € en ligne
+        <button className="btn btn-b" style={{ width: '100%' }} onClick={payer} disabled={state === 'loading'}>
+          {state === 'loading'
+            ? <><Spin /> Connexion à {prov.nom}…</>
+            : <><Icon name={pai.methode === 'auto' ? 'card' : 'external'} size={15} /> Payer {aPayer} € en ligne</>}
         </button>
+      )}
+      {state === 'error' && (
+        <p style={{ color: 'var(--danger)', fontSize: 12.5, marginTop: 8, textAlign: 'center' }}>
+          Paiement indisponible ({err}). Vous pourrez régler sur place.
+        </p>
       )}
       <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 10, textAlign: 'center', display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'center' }}>
         <Icon name="shield" size={13} /> Paiement sécurisé {prov.nom} · {prov.modes}
@@ -2169,8 +2210,10 @@ function PaiementsTab({ salon, onUpdate }) {
   const pai = getPaiement(salon);
   const [form, setForm] = useState({
     active: pai.active,
+    methode: pai.methode,
     provider: pai.provider,
     lien: pai.lien,
+    fnUrl: pai.fnUrl,
     mode: pai.mode,
     acompte: pai.acompte,
   });
@@ -2179,13 +2222,17 @@ function PaiementsTab({ salon, onUpdate }) {
 
   function save() {
     const lien = form.lien.trim();
-    onUpdate({ ...salon, paiement: { active: form.active && !!lien, provider: form.provider, lien, mode: form.mode, acompte: Number(form.acompte) } });
+    const fnUrl = form.fnUrl.trim();
+    const configOk = form.methode === 'auto' ? !!fnUrl : !!lien;
+    onUpdate({ ...salon, paiement: { active: form.active && configOk, methode: form.methode, provider: form.provider, lien, fnUrl, mode: form.mode, acompte: Number(form.acompte) } });
     setSaved(true);
     setTimeout(() => setSaved(false), 2500);
   }
 
   const prov = PAIEMENT_PROVIDERS[form.provider] || PAIEMENT_PROVIDERS.stripe;
   const lienOk = /^https?:\/\//i.test(form.lien.trim());
+  const fnOk = /^https?:\/\//i.test(form.fnUrl.trim());
+  const isAuto = form.methode === 'auto';
 
   return (
     <div>
@@ -2207,6 +2254,27 @@ function PaiementsTab({ salon, onUpdate }) {
 
       {form.active && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {/* Méthode d'encaissement */}
+          <div>
+            <label style={{ fontSize: 13, color: 'var(--text-dim)', display: 'block', marginBottom: 8 }}>Méthode d'encaissement</label>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              <button onClick={() => upd('methode', 'lien')}
+                style={{ textAlign: 'left', padding: '12px 14px', borderRadius: 12, cursor: 'pointer',
+                  border: `1.5px solid ${!isAuto ? 'var(--cream)' : 'var(--border)'}`,
+                  background: !isAuto ? 'var(--cream-pale)' : 'var(--surface2)', color: 'var(--text)' }}>
+                <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 2 }}>Lien fixe</div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Montant figé · sans serveur</div>
+              </button>
+              <button onClick={() => upd('methode', 'auto')}
+                style={{ textAlign: 'left', padding: '12px 14px', borderRadius: 12, cursor: 'pointer',
+                  border: `1.5px solid ${isAuto ? 'var(--cream)' : 'var(--border)'}`,
+                  background: isAuto ? 'var(--cream-pale)' : 'var(--surface2)', color: 'var(--text)' }}>
+                <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 2 }}>Automatique ✨</div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Montant exact par prestation</div>
+              </button>
+            </div>
+          </div>
+
           {/* Prestataire */}
           <div>
             <label style={{ fontSize: 13, color: 'var(--text-dim)', display: 'block', marginBottom: 8 }}>Prestataire de paiement</label>
@@ -2223,19 +2291,34 @@ function PaiementsTab({ salon, onUpdate }) {
             </p>
           </div>
 
-          {/* Lien de paiement */}
-          <div>
-            <label style={{ fontSize: 13, color: 'var(--text-dim)', display: 'block', marginBottom: 6 }}>
-              Lien de paiement {prov.nom}
-            </label>
-            <input className="fi" placeholder="https://buy.stripe.com/..." value={form.lien} onChange={e => upd('lien', e.target.value)} />
-            <p style={{ fontSize: 12.5, color: 'var(--text-muted)', marginTop: 6, lineHeight: 1.5 }}>
-              Créez un « lien de paiement » dans votre tableau de bord {prov.nom} (gratuit, sans code), puis collez-le ici. Le client sera redirigé vers la page sécurisée de {prov.nom} pour régler par {prov.modes.split(' · ')[0]}, Apple&nbsp;Pay, etc.
-            </p>
-            {form.lien && !lienOk && (
-              <p style={{ fontSize: 12.5, color: 'var(--danger)', marginTop: 4 }}>Le lien doit commencer par https://</p>
-            )}
-          </div>
+          {/* Configuration selon la méthode */}
+          {!isAuto ? (
+            <div>
+              <label style={{ fontSize: 13, color: 'var(--text-dim)', display: 'block', marginBottom: 6 }}>
+                Lien de paiement {prov.nom}
+              </label>
+              <input className="fi" placeholder="https://buy.stripe.com/..." value={form.lien} onChange={e => upd('lien', e.target.value)} />
+              <p style={{ fontSize: 12.5, color: 'var(--text-muted)', marginTop: 6, lineHeight: 1.5 }}>
+                Créez un « lien de paiement » dans votre tableau de bord {prov.nom} (gratuit, sans code), puis collez-le ici. Le client sera redirigé vers la page sécurisée de {prov.nom} pour régler par {prov.modes.split(' · ')[0]}, Apple&nbsp;Pay, etc.
+              </p>
+              {form.lien && !lienOk && (
+                <p style={{ fontSize: 12.5, color: 'var(--danger)', marginTop: 4 }}>Le lien doit commencer par https://</p>
+              )}
+            </div>
+          ) : (
+            <div>
+              <label style={{ fontSize: 13, color: 'var(--text-dim)', display: 'block', marginBottom: 6 }}>
+                URL de la fonction de paiement
+              </label>
+              <input className="fi" placeholder="https://votre-projet.vercel.app/api/checkout" value={form.fnUrl} onChange={e => upd('fnUrl', e.target.value)} />
+              <p style={{ fontSize: 12.5, color: 'var(--text-muted)', marginTop: 6, lineHeight: 1.5 }}>
+                Déployez la fonction <code style={{ color: 'var(--cream-dim)' }}>api/checkout.js</code> (fournie dans le projet) sur Vercel, ajoutez-y votre clé secrète Stripe, puis collez l'URL ici. Le montant exact de chaque prestation sera encaissé automatiquement — pas besoin de créer un lien par prestation. Voir <code style={{ color: 'var(--cream-dim)' }}>PAIEMENTS.md</code> pour le guide pas à pas.
+              </p>
+              {form.fnUrl && !fnOk && (
+                <p style={{ fontSize: 12.5, color: 'var(--danger)', marginTop: 4 }}>L'URL doit commencer par https://</p>
+              )}
+            </div>
+          )}
 
           {/* Mode : acompte ou total */}
           <div>
