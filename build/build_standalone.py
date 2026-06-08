@@ -41,7 +41,44 @@ def patch(path, body):
     print(f"patched {path} ({len(out)} bytes)")
 
 
+# Balises PWA injectées dans index.html (installation écran d'accueil)
+PWA_HEAD = """  <link rel="manifest" href="./manifest.json" />
+  <meta name="theme-color" content="#0a0a0b" />
+  <link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png" />
+  <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
+  <meta name="apple-mobile-web-app-title" content="BarberLink" />
+  <meta name="application-name" content="BarberLink" />
+"""
+PWA_SW = """  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function () {
+        navigator.serviceWorker.register('./sw.js').catch(function () {});
+      });
+    }
+  </script>
+"""
+STYLE_ANCHOR = "  <style>body{margin:0;background:#0a0a0b;}"
+
+
+def generate_index():
+    """index.html = version autonome (index_standalone) + balises PWA + SW.
+
+    On évite ainsi le bug du `import` brut : l'app est inlinée et prête à tourner
+    dans le navigateur, tout en restant installable (manifest + service worker).
+    """
+    src = open(os.path.join(ROOT, "index_standalone.html"), encoding="utf8").read()
+    # Injecte les balises PWA juste avant le <style> du <head>
+    if PWA_HEAD.strip() not in src:
+        src = src.replace(STYLE_ANCHOR, PWA_HEAD + STYLE_ANCHOR, 1)
+    # Injecte l'enregistrement du service worker avant </body>
+    if "serviceWorker" not in src:
+        src = src.replace("</body>", PWA_SW + "</body>", 1)
+    open(os.path.join(ROOT, "index.html"), "w", encoding="utf8").write(src)
+    print(f"generated index.html ({len(src)} bytes)")
+
+
 if __name__ == "__main__":
     body = app_body()
     patch(os.path.join(ROOT, "index_standalone.html"), body)
     patch(os.path.join(ROOT, "barberlink.html"), body)
+    generate_index()
