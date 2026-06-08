@@ -278,39 +278,106 @@ function PoleHeader({ onAdmin }) {
 // ============================================================
 // SPLINE 3D BACKGROUND
 // ============================================================
-const SPLINE_URL = 'https://prod.spline.design/Nxh1g8AzQO7NMtDV/scene.splinecode';
+const SPLINE_URL = 'https://prod.spline.design/Nxh1g8AzQO7NMtDV/scene.splinecode';       // hero / ambiance
+const SPLINE_SPLASH_URL = 'https://prod.spline.design/PmDZ8fEOEkbZXZDF/scene.splinecode'; // intro splash
 const SPLINE_SCRIPT = 'https://unpkg.com/@splinetool/viewer@1.12.97/build/spline-viewer.js';
 
-// Loads the spline-viewer custom element once, then renders it as a background layer.
-function SplineBackground({ overlay = 'linear-gradient(to bottom, rgba(10,10,11,.55), rgba(10,10,11,.75) 60%, var(--bg))', dim = 1 }) {
+// Ensures the spline-viewer custom element module is loaded once.
+function useSplineLoaded() {
   const [ready, setReady] = useState(!!window.customElements?.get?.('spline-viewer'));
-
   useEffect(() => {
     if (window.customElements?.get?.('spline-viewer')) { setReady(true); return; }
-    let s = document.querySelector('script[data-spline-viewer]');
-    if (!s) {
-      s = document.createElement('script');
+    if (!document.querySelector('script[data-spline-viewer]')) {
+      const s = document.createElement('script');
       s.type = 'module';
       s.src = SPLINE_SCRIPT;
       s.setAttribute('data-spline-viewer', '1');
       document.head.appendChild(s);
     }
-    // Poll until the custom element is defined
     const t = setInterval(() => {
       if (window.customElements?.get?.('spline-viewer')) { setReady(true); clearInterval(t); }
-    }, 200);
+    }, 150);
     return () => clearInterval(t);
   }, []);
+  return ready;
+}
 
+// Renders a Spline scene as an absolute background layer with a readability overlay.
+function SplineBackground({ url = SPLINE_URL, overlay = 'linear-gradient(to bottom, rgba(10,10,11,.55), rgba(10,10,11,.75) 60%, var(--bg))', dim = 1, interactive = false }) {
+  const ready = useSplineLoaded();
   return (
-    <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', zIndex: 0, pointerEvents: 'none' }}>
+    <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', zIndex: 0, pointerEvents: interactive ? 'auto' : 'none' }}>
       {ready && React.createElement('spline-viewer', {
-        url: SPLINE_URL,
+        url,
         'loading-anim-type': 'none',
         style: { width: '100%', height: '100%', opacity: dim, display: 'block' },
       })}
-      {/* Readability overlay */}
-      <div style={{ position: 'absolute', inset: 0, background: overlay }} />
+      <div style={{ position: 'absolute', inset: 0, background: overlay, pointerEvents: 'none' }} />
+      {/* Cover the "Built with Spline" watermark (bottom-right) */}
+      <div style={{ position: 'absolute', bottom: 0, right: 0, width: 150, height: 44, background: 'var(--bg)', pointerEvents: 'none' }} />
+    </div>
+  );
+}
+
+// Wraps a screen with a dim ambient Spline background behind its content.
+function Ambient({ children, dim = 0.6 }) {
+  return (
+    <div style={{ position: 'relative', minHeight: 'calc(100vh - 58px)', overflow: 'hidden' }}>
+      <SplineBackground dim={dim} overlay="linear-gradient(to bottom, rgba(10,10,11,.82), rgba(10,10,11,.93))" />
+      <div style={{ position: 'relative', zIndex: 1 }}>{children}</div>
+    </div>
+  );
+}
+
+// ============================================================
+// SPLASH / INTRO SCREEN (on app open)
+// ============================================================
+function SplashScreen({ onDone }) {
+  const ready = useSplineLoaded();
+  const [leaving, setLeaving] = useState(false);
+
+  function dismiss() {
+    if (leaving) return;
+    setLeaving(true);
+    setTimeout(onDone, 600);
+  }
+
+  // Auto-dismiss after a few seconds
+  useEffect(() => {
+    const t = setTimeout(dismiss, 4200);
+    return () => clearTimeout(t);
+  }, []);
+
+  return (
+    <div onClick={dismiss}
+      style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'var(--bg)', cursor: 'pointer',
+        opacity: leaving ? 0 : 1, transition: 'opacity .6s ease', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+      {/* Spline splash scene */}
+      <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
+        {ready && React.createElement('spline-viewer', {
+          url: SPLINE_SPLASH_URL,
+          'loading-anim-type': 'none',
+          style: { width: '100%', height: '100%', display: 'block' },
+        })}
+        <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse at center, transparent 30%, rgba(10,10,11,.65) 100%)' }} />
+        <div style={{ position: 'absolute', bottom: 0, right: 0, width: 150, height: 44, background: 'var(--bg)' }} />
+      </div>
+
+      {/* App name overlay (replaces the scene's default text) */}
+      <div className="af" style={{ position: 'relative', zIndex: 1, textAlign: 'center', padding: 24 }}>
+        <div style={{ display: 'flex', justifyContent: 'center', gap: 12, marginBottom: 22 }}>
+          {[0,1,2].map(i => <div key={i} className="pole" style={{ height: 54, animationDelay: `${i * 0.3}s` }} />)}
+        </div>
+        <h1 style={{ fontSize: 'clamp(3rem,12vw,6rem)', fontWeight: 900, letterSpacing: '-.04em', lineHeight: 1, textShadow: '0 4px 30px rgba(0,0,0,.6)' }}>
+          Barber<span style={{ color: 'var(--cream)' }}>Link</span>
+        </h1>
+        <p style={{ color: 'var(--cream-dim)', fontSize: 17, marginTop: 14, fontStyle: 'italic', letterSpacing: '.02em' }}>
+          Réservez votre barbier avec style
+        </p>
+        <p style={{ color: 'var(--text-muted)', fontSize: 13, marginTop: 34, letterSpacing: '.08em', textTransform: 'uppercase' }}>
+          Toucher pour entrer
+        </p>
+      </div>
     </div>
   );
 }
@@ -1927,6 +1994,7 @@ function AdminPanel({ onBack }) {
 // APP ROOT
 // ============================================================
 export default function App() {
+  const [splash, setSplash] = useState(true);
   const [screen, setScreen] = useState('landing');
   const [client, setClient] = useState(null);
   const [salon, setSalon] = useState(null);
@@ -1945,6 +2013,8 @@ export default function App() {
     seedData();
     return () => { try { document.head.removeChild(el); } catch {} };
   }, []);
+
+  if (splash) return <SplashScreen onDone={() => setSplash(false)} />;
 
   function handleBook(s, barbier) {
     setBookingTarget({ salon: s, barbier });
@@ -1983,33 +2053,41 @@ export default function App() {
         )}
 
         {screen === 'client-login' && (
-          <ClientRegistration
-            onDone={c => { setClient(c); setScreen('directory'); }}
-            onBack={() => setScreen('landing')}
-          />
+          <Ambient>
+            <ClientRegistration
+              onDone={c => { setClient(c); setScreen('directory'); }}
+              onBack={() => setScreen('landing')}
+            />
+          </Ambient>
         )}
 
         {screen === 'client-login-search' && (
-          <ClientRegistration
-            onDone={c => { setClient(c); setScreen('directory'); }}
-            onBack={() => setScreen('landing')}
-            subtitle={`Recherche : ${searchParams.prestation || 'tous services'}${searchParams.ville ? ' · ' + searchParams.ville : ''}`}
-          />
+          <Ambient>
+            <ClientRegistration
+              onDone={c => { setClient(c); setScreen('directory'); }}
+              onBack={() => setScreen('landing')}
+              subtitle={`Recherche : ${searchParams.prestation || 'tous services'}${searchParams.ville ? ' · ' + searchParams.ville : ''}`}
+            />
+          </Ambient>
         )}
 
         {screen === 'salon-login' && (
-          <SalonLogin
-            onDone={s => { setSalon(s); setScreen('salon-dashboard'); }}
-            onRegister={() => setScreen('salon-register')}
-            onBack={() => setScreen('landing')}
-          />
+          <Ambient>
+            <SalonLogin
+              onDone={s => { setSalon(s); setScreen('salon-dashboard'); }}
+              onRegister={() => setScreen('salon-register')}
+              onBack={() => setScreen('landing')}
+            />
+          </Ambient>
         )}
 
         {screen === 'salon-register' && (
-          <SalonRegistration
-            onDone={s => { setSalon(s); setScreen('salon-dashboard'); }}
-            onBack={() => setScreen('salon-login')}
-          />
+          <Ambient>
+            <SalonRegistration
+              onDone={s => { setSalon(s); setScreen('salon-dashboard'); }}
+              onBack={() => setScreen('salon-login')}
+            />
+          </Ambient>
         )}
 
         {screen === 'directory' && client && (
