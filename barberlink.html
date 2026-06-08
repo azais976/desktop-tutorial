@@ -361,6 +361,7 @@ input,textarea,select{font-family:inherit;}
 @keyframes fadeInUp{from{opacity:0;transform:translateY(18px);}to{opacity:1;transform:translateY(0);}}
 @keyframes fadeIn{from{opacity:0;}to{opacity:1;}}
 @keyframes poleMove{from{background-position:0 0;}to{background-position:0 60px;}}
+@keyframes poleSpin{from{background-position:0 0;}to{background-position:0 -42px;}}
 @keyframes spin{from{transform:rotate(0deg);}to{transform:rotate(360deg);}}
 @keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(239,227,200,.3);}50%{box-shadow:0 0 0 8px rgba(239,227,200,0);}}
 .afu{animation:fadeInUp .5s cubic-bezier(.2,.8,.2,1) both;}
@@ -369,6 +370,12 @@ input,textarea,select{font-family:inherit;}
 .card-hover{transition:transform .25s cubic-bezier(.2,.8,.2,1),box-shadow .25s,border-color .2s;}
 .card-hover:hover{transform:translateY(-3px);box-shadow:0 12px 40px rgba(0,0,0,.5);border-color:rgba(255,255,255,.2)!important;}
 .pole{width:9px;border-radius:5px;background:repeating-linear-gradient(0deg,#CC2222 0,#CC2222 10px,#F5F5F5 10px,#F5F5F5 20px,#1A4F9A 20px,#1A4F9A 30px);animation:poleMove 1.8s linear infinite;}
+/* Barber pole 3D : cylindre tournant en continu (illusion 360°) */
+.pole3d-wrap{display:flex;flex-direction:column;align-items:center;filter:drop-shadow(0 6px 10px rgba(0,0,0,.5));}
+.pole-cap{border-radius:7px;background:linear-gradient(180deg,#fff 0%,#EFE3C8 42%,#9c8f70 100%);box-shadow:0 1px 2px rgba(0,0,0,.45),inset 0 1px 0 rgba(255,255,255,.7);position:relative;z-index:2;}
+.pole3d{position:relative;overflow:hidden;border-radius:999px;background-repeat:repeat;background-image:repeating-linear-gradient(115deg,#CC2222 0 14px,#F5F5F5 14px 28px,#1A4F9A 28px 42px);background-size:auto 42px;animation:poleSpin 1.25s linear infinite;}
+.pole3d::before{content:'';position:absolute;inset:0;border-radius:inherit;background:linear-gradient(90deg,rgba(0,0,0,.65) 0%,rgba(0,0,0,.18) 24%,rgba(255,255,255,.85) 43%,rgba(255,255,255,.05) 62%,rgba(0,0,0,.3) 82%,rgba(0,0,0,.7) 100%);mix-blend-mode:overlay;}
+.pole3d::after{content:'';position:absolute;inset:0;border-radius:inherit;box-shadow:inset 0 0 10px rgba(0,0,0,.45),inset 0 0 0 1px rgba(255,255,255,.12);}
 .divider{height:1px;background:var(--border);margin:14px 0;}
 .fi{background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:12px;padding:12px 15px;width:100%;font-size:15px;transition:border-color .2s,box-shadow .2s;outline:none;}
 .fi:focus{border-color:var(--cream-dim);box-shadow:0 0 0 3px rgba(239,227,200,.08);}
@@ -701,10 +708,23 @@ function Tabs({ tabs, active, onChange }) {
 // ============================================================
 // BARBER POLE HEADER
 // ============================================================
+// Barber pole 3D animé — cylindre brillant qui tourne en continu (illusion 360°)
+function BarberPole3D({ height = 64, width = 16, delay = 0, capH }) {
+  const ch = capH || Math.max(7, Math.round(width * 0.62));
+  const capW = Math.round(width * 1.5);
+  return (
+    <div className="pole3d-wrap">
+      <div className="pole-cap" style={{ width: capW, height: ch }} />
+      <div className="pole3d" style={{ width, height, animationDelay: `${delay}s`, margin: '-1px 0' }} />
+      <div className="pole-cap" style={{ width: capW, height: ch }} />
+    </div>
+  );
+}
+
 function PoleHeader({ onAdmin }) {
   return (
     <header style={{ background: 'rgba(10,10,11,.85)', backdropFilter: 'blur(12px)', borderBottom: '1px solid var(--border)', padding: '0 18px', height: 58, display: 'flex', alignItems: 'center', gap: 12, position: 'sticky', top: 0, zIndex: 90 }}>
-      <div style={{ width: 34, height: 34, borderRadius: 10, background: 'var(--cream)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, color: '#1a1a16' }}><Icon name="scissors" size={18} /></div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 34, flexShrink: 0 }}><BarberPole3D height={30} width={11} capH={6} /></div>
       <span style={{ fontFamily: "'Fraunces', serif", fontSize: 23, fontWeight: 600, color: 'var(--text)', letterSpacing: '-.02em' }}>BarberLink</span>
       <div style={{ flex: 1 }} />
       <button onClick={onAdmin} className="btn btn-o btn-sm" style={{ fontSize: 12 }}>Admin</button>
@@ -821,8 +841,10 @@ function LandingScreen({ onClient, onSalon, onSearch }) {
       <div style={{ position: 'relative', flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '48px 24px 40px', textAlign: 'center', overflow: 'hidden', minHeight: '90vh' }}>
         <SplineBackground />
         <div style={{ position: 'relative', zIndex: 1, width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-        <div className="afu" style={{ display: 'flex', justifyContent: 'center', gap: 14, marginBottom: 28 }}>
-          {[0,1,2].map(i => <div key={i} className="pole" style={{ height: 64, animationDelay: `${i * 0.3}s` }} />)}
+        <div className="afu" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 20, marginBottom: 30 }}>
+          <BarberPole3D height={52} width={15} delay={0.25} />
+          <BarberPole3D height={78} width={20} delay={0} />
+          <BarberPole3D height={52} width={15} delay={0.25} />
         </div>
 
         <h1 className="afu s1" style={{ fontSize: 'clamp(2.6rem,8vw,4.4rem)', fontWeight: 900, letterSpacing: '-.03em', marginBottom: 14 }}>
