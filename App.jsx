@@ -276,6 +276,46 @@ function PoleHeader({ onAdmin }) {
 }
 
 // ============================================================
+// SPLINE 3D BACKGROUND
+// ============================================================
+const SPLINE_URL = 'https://prod.spline.design/Nxh1g8AzQO7NMtDV/scene.splinecode';
+const SPLINE_SCRIPT = 'https://unpkg.com/@splinetool/viewer@1.12.97/build/spline-viewer.js';
+
+// Loads the spline-viewer custom element once, then renders it as a background layer.
+function SplineBackground({ overlay = 'linear-gradient(to bottom, rgba(10,10,11,.55), rgba(10,10,11,.75) 60%, var(--bg))', dim = 1 }) {
+  const [ready, setReady] = useState(!!window.customElements?.get?.('spline-viewer'));
+
+  useEffect(() => {
+    if (window.customElements?.get?.('spline-viewer')) { setReady(true); return; }
+    let s = document.querySelector('script[data-spline-viewer]');
+    if (!s) {
+      s = document.createElement('script');
+      s.type = 'module';
+      s.src = SPLINE_SCRIPT;
+      s.setAttribute('data-spline-viewer', '1');
+      document.head.appendChild(s);
+    }
+    // Poll until the custom element is defined
+    const t = setInterval(() => {
+      if (window.customElements?.get?.('spline-viewer')) { setReady(true); clearInterval(t); }
+    }, 200);
+    return () => clearInterval(t);
+  }, []);
+
+  return (
+    <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', zIndex: 0, pointerEvents: 'none' }}>
+      {ready && React.createElement('spline-viewer', {
+        url: SPLINE_URL,
+        'loading-anim-type': 'none',
+        style: { width: '100%', height: '100%', opacity: dim, display: 'block' },
+      })}
+      {/* Readability overlay */}
+      <div style={{ position: 'absolute', inset: 0, background: overlay }} />
+    </div>
+  );
+}
+
+// ============================================================
 // LANDING
 // ============================================================
 const CATEGORIES = [
@@ -298,7 +338,9 @@ function LandingScreen({ onClient, onSalon, onSearch }) {
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
       {/* HERO */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '48px 24px 40px', textAlign: 'center' }}>
+      <div style={{ position: 'relative', flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '48px 24px 40px', textAlign: 'center', overflow: 'hidden', minHeight: '90vh' }}>
+        <SplineBackground />
+        <div style={{ position: 'relative', zIndex: 1, width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
         <div className="afu" style={{ display: 'flex', justifyContent: 'center', gap: 14, marginBottom: 28 }}>
           {[0,1,2].map(i => <div key={i} className="pole" style={{ height: 64, animationDelay: `${i * 0.3}s` }} />)}
         </div>
@@ -342,7 +384,7 @@ function LandingScreen({ onClient, onSalon, onSearch }) {
             { val: '24h/24', label: 'Réservation' },
           ].map(s => (
             <div key={s.label} className="stat-card">
-              <div style={{ fontSize: 26, fontWeight: 900, color: 'var(--brass)', fontFamily: "'Playfair Display',serif" }}>{s.val}</div>
+              <div style={{ fontSize: 26, fontWeight: 900, color: 'var(--cream)', fontFamily: "'Archivo',sans-serif" }}>{s.val}</div>
               <div style={{ fontSize: 13, color: 'var(--text-dim)', marginTop: 3 }}>{s.label}</div>
             </div>
           ))}
@@ -351,6 +393,7 @@ function LandingScreen({ onClient, onSalon, onSearch }) {
         <div className="afu s4" style={{ display: 'flex', gap: 14, flexWrap: 'wrap', justifyContent: 'center' }}>
           <button onClick={onClient} className="btn btn-b btn-lg">✂ Trouver un barbier</button>
           <button onClick={onSalon} className="btn btn-o btn-lg">🏪 Espace salon</button>
+        </div>
         </div>
       </div>
 
