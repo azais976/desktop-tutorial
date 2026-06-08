@@ -320,8 +320,7 @@ var e,t,r="function"==typeof Symbol?Symbol:{},a=r.iterator||"@@iterator",n=r.toS
     if (!window.storage) { var _s={}; window.storage={get:function(k){if(!(k in _s))throw new Error('nf');return _s[k];},set:function(k,v){_s[k]=v;},delete:function(k){delete _s[k];},list:function(){return Object.keys(_s);}}; }
   </script>
   <script type="text/babel" data-presets="react">
-    const { useState, useEffect, useRef } = React;
-
+const { useState, useEffect, useRef } = React;
 
 // ============================================================
 // CONSTANTS
@@ -330,11 +329,15 @@ const FORFAITS = {
   essentiel: { id: 'essentiel', nom: 'Essentiel', prix: 49, color: '#8B7355' },
   croissance: { id: 'croissance', nom: 'Croissance', prix: 99, color: '#B8860B' },
   premium: { id: 'premium', nom: 'Premium', prix: 179, color: '#D4AF37' },
+  reseau: { id: 'reseau', nom: 'Réseau', prix: 199, extraParSalon: 50, color: '#9C7BD0' },
 };
 const PRESTATIONS = ['Coupe homme','Coupe femme','Coupe enfant','Barbe','Teinture / Coloration','Dessin / Tracé'];
 const VILLES = ['Saint-Denis','Saint-Paul','Saint-Pierre','Le Tampon','Saint-Louis','Sainte-Marie','Saint-Benoît','Saint-André','Saint-Joseph','Sainte-Suzanne','Le Port','Saint-Leu'];
 const ADMIN_CODE = 'ADMIN2025';
 const HEURES = ['08:00','08:30','09:00','09:30','10:00','10:30','11:00','11:30','12:00','12:30','13:00','13:30','14:00','14:30','15:00','15:30','16:00','16:30','17:00','17:30','18:00','18:30','19:00'];
+const JOURS = ['lundi','mardi','mercredi','jeudi','vendredi','samedi','dimanche'];
+const JOURS_LABELS = { lundi:'Lundi', mardi:'Mardi', mercredi:'Mercredi', jeudi:'Jeudi', vendredi:'Vendredi', samedi:'Samedi', dimanche:'Dimanche' };
+const HORAIRES_DEFAULT = { lundi:{ouvert:true,debut:'09:00',fin:'19:00'}, mardi:{ouvert:true,debut:'09:00',fin:'19:00'}, mercredi:{ouvert:true,debut:'09:00',fin:'19:00'}, jeudi:{ouvert:true,debut:'09:00',fin:'19:00'}, vendredi:{ouvert:true,debut:'09:00',fin:'19:00'}, samedi:{ouvert:true,debut:'09:00',fin:'19:00'}, dimanche:{ouvert:false,debut:'09:00',fin:'13:00'} };
 
 // ============================================================
 // GLOBAL CSS
@@ -453,6 +456,17 @@ function fmtDate(d) {
   return `${day}/${m}/${y}`;
 }
 function fmtPrice(p) { return p ? `${p} €` : '—'; }
+function fmtHoraires(h) {
+  if (!h || typeof h === 'string') return h || '';
+  const labels = { lundi:'Lun',mardi:'Mar',mercredi:'Mer',jeudi:'Jeu',vendredi:'Ven',samedi:'Sam',dimanche:'Dim' };
+  const open = JOURS.filter(j => h[j]?.ouvert);
+  if (!open.length) return 'Fermé';
+  const firstH = h[open[0]];
+  if (open.length === 7 || (open.length >= 5 && open.every(j => h[j].debut === firstH.debut && h[j].fin === firstH.fin))) {
+    return `${labels[open[0]]}–${labels[open[open.length-1]]} ${firstH.debut.replace(':','h')}–${firstH.fin.replace(':','h')}`;
+  }
+  return open.map(j => `${labels[j]} ${h[j].debut.replace(':','h')}–${h[j].fin.replace(':','h')}`).join(', ');
+}
 function avgNote(avis) {
   if (!avis?.length) return 0;
   return (avis.reduce((s, a) => s + (a.note || 0), 0) / avis.length).toFixed(1);
@@ -499,6 +513,9 @@ const ICONS = {
   store: <g><path d="M4 9.5 5.3 4h13.4L20 9.5"/><path d="M5 9.5V20h14V9.5"/><path d="M4 9.5a2.7 2.7 0 0 0 5.3 0 2.7 2.7 0 0 0 5.4 0 2.7 2.7 0 0 0 5.3 0"/><path d="M10 20v-5h4v5"/></g>,
   hourglass: <g><path d="M6 3h12M6 21h12"/><path d="M7 3v3.6c0 .5.2 1 .6 1.4L12 12l4.4-4c.4-.4.6-.9.6-1.4V3"/><path d="M7 21v-3.6c0-.5.2-1 .6-1.4L12 12l4.4 4c.4.4.6.9.6 1.4V21"/></g>,
   info: <g><circle cx="12" cy="12" r="8.5"/><line x1="12" y1="11" x2="12" y2="16"/><circle cx="12" cy="8" r=".7"/></g>,
+  settings: <g><circle cx="12" cy="12" r="2.8"/><path d="M19.1 14.4l.9 1.6-2 2-1.6-.9a6.5 6.5 0 0 1-2.2.9L14 20h-3l-.2-1.9a6.5 6.5 0 0 1-2.2-.9l-1.6.9-2-2 .9-1.6a6.5 6.5 0 0 1-.9-2.2L4 12v-1l.1-.5.1-.7a6.5 6.5 0 0 1 .9-2.2L4.2 6 6 4l1.6.9a6.5 6.5 0 0 1 2.2-.9L10 2h3l.2 1.9a6.5 6.5 0 0 1 2.2.9L17 3.8 19 6l-.9 1.6c.4.7.7 1.4.9 2.2L21 10v3l-1.9.2a6.5 6.5 0 0 1-.9 2.2z"/></g>,
+  plus: <g><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></g>,
+  trash: <g><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></g>,
 };
 
 function Icon({ name, size = 17, stroke = 1.5, style }) {
@@ -874,22 +891,32 @@ function ClientRegistration({ onDone, onBack, subtitle }) {
 // ============================================================
 function SalonRegistration({ onDone, onBack }) {
   const [step, setStep] = useState(0);
-  const [form, setForm] = useState({ nom: '', ville: '', adresse: '', telephone: '', horaires: '', lienAvisGoogle: '', infos: '', forfait: 'essentiel', nbBarbiers: 1, barbiers: [{ nom: '', tarifs: {}, portfolio: [] }] });
+  const [form, setForm] = useState({
+    nom: '', ville: '', adresse: '', telephone: '',
+    horaires: { ...HORAIRES_DEFAULT },
+    lienAvisGoogle: '', infos: '',
+    forfait: 'essentiel', nbBarbiers: 1,
+    barbiers: [{ nom: '', photo: '' }],
+  });
   const [err, setErr] = useState('');
 
   const upd = (k, v) => setForm(f => ({ ...f, [k]: v }));
   const updBarb = (i, k, v) => setForm(f => { const b = [...f.barbiers]; b[i] = { ...b[i], [k]: v }; return { ...f, barbiers: b }; });
-  const updTarif = (i, p, v) => setForm(f => { const b = [...f.barbiers]; b[i] = { ...b[i], tarifs: { ...b[i].tarifs, [p]: v ? Number(v) : undefined } }; return { ...f, barbiers: b }; });
+  const updHoraire = (j, k, v) => setForm(f => ({ ...f, horaires: { ...f.horaires, [j]: { ...f.horaires[j], [k]: v } } }));
 
   function setNbBarbiers(n) {
     const nb = Math.max(1, Math.min(10, Number(n)));
     const barb = [...form.barbiers];
-    while (barb.length < nb) barb.push({ nom: '', tarifs: {}, portfolio: [] });
+    while (barb.length < nb) barb.push({ nom: '', photo: '' });
     setForm(f => ({ ...f, nbBarbiers: nb, barbiers: barb.slice(0, nb) }));
   }
 
+  function validateStep0() {
+    if (!form.nom.trim() || !form.ville || !form.adresse.trim()) { setErr('Nom du salon, ville et adresse sont obligatoires.'); return false; }
+    setErr(''); return true;
+  }
+
   function submit() {
-    if (!form.nom.trim() || !form.ville || !form.adresse.trim()) { setErr('Champs obligatoires manquants.'); return; }
     const id = 's_' + uid();
     const lat = -20.5 + Math.random() * 1.5;
     const lng = 55.2 + Math.random() * 0.6;
@@ -898,14 +925,10 @@ function SalonRegistration({ onDone, onBack }) {
     onDone(salon);
   }
 
-  const steps = [
-    { label: 'Infos salon' },
-    { label: 'Barbiers & Tarifs' },
-    { label: 'Forfait' },
-  ];
+  const steps = [{ label: 'Infos salon' }, { label: 'Barbiers' }, { label: 'Forfait' }];
 
   return (
-    <div style={{ maxWidth: 560, margin: '0 auto', padding: 24 }}>
+    <div style={{ maxWidth: 580, margin: '0 auto', padding: 24 }}>
       <button onClick={onBack} className="btn btn-o btn-sm" style={{ marginBottom: 20 }}>← Retour</button>
       <h2 style={{ marginBottom: 20 }}>Inscrire mon salon</h2>
 
@@ -917,6 +940,7 @@ function SalonRegistration({ onDone, onBack }) {
         ))}
       </div>
 
+      {/* ── Step 0 : Infos salon ── */}
       {step === 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <input className="fi" placeholder="Nom du salon *" value={form.nom} onChange={e => upd('nom', e.target.value)} />
@@ -926,37 +950,63 @@ function SalonRegistration({ onDone, onBack }) {
           </select>
           <input className="fi" placeholder="Adresse complète *" value={form.adresse} onChange={e => upd('adresse', e.target.value)} />
           <input className="fi" placeholder="Téléphone" value={form.telephone} onChange={e => upd('telephone', e.target.value)} />
-          <input className="fi" placeholder="Horaires (ex : Lun–Sam 9h–19h)" value={form.horaires} onChange={e => upd('horaires', e.target.value)} />
           <input className="fi" placeholder="Lien avis Google (optionnel)" value={form.lienAvisGoogle} onChange={e => upd('lienAvisGoogle', e.target.value)} />
-          <textarea className="fi" placeholder="Infos pratiques (parking, etc.)" value={form.infos} onChange={e => upd('infos', e.target.value)} rows={3} />
+          <textarea className="fi" placeholder="Infos pratiques (parking, accès, etc.)" value={form.infos} onChange={e => upd('infos', e.target.value)} rows={3} />
+
+          {/* Horaires table */}
           <div>
-            <label style={{ color: 'var(--text-dim)', fontSize: 14 }}>Nombre de barbiers</label>
-            <input className="fi" type="number" min={1} max={10} value={form.nbBarbiers} onChange={e => setNbBarbiers(e.target.value)} style={{ marginTop: 6 }} />
+            <label style={{ color: 'var(--text-dim)', fontSize: 13, display: 'block', marginBottom: 8 }}>Horaires d'ouverture</label>
+            <div style={{ background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden' }}>
+              {JOURS.map((j, idx) => {
+                const h = form.horaires[j];
+                return (
+                  <div key={j} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 14px', borderBottom: idx < 6 ? '1px solid var(--border)' : 'none' }}>
+                    <span style={{ width: 88, fontSize: 14, fontWeight: 500, flexShrink: 0 }}>{JOURS_LABELS[j]}</span>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer', minWidth: 66, flexShrink: 0 }}>
+                      <input type="checkbox" checked={h.ouvert} onChange={e => updHoraire(j, 'ouvert', e.target.checked)} style={{ accentColor: 'var(--cream)', width: 14, height: 14 }} />
+                      <span style={{ fontSize: 12, color: h.ouvert ? 'var(--cream-dim)' : 'var(--text-muted)' }}>{h.ouvert ? 'Ouvert' : 'Fermé'}</span>
+                    </label>
+                    <input type="time" className="fi" value={h.debut} disabled={!h.ouvert}
+                      onChange={e => updHoraire(j, 'debut', e.target.value)}
+                      style={{ flex: 1, padding: '7px 10px', fontSize: 13, opacity: h.ouvert ? 1 : 0.3, minWidth: 0 }} />
+                    <span style={{ color: 'var(--text-muted)', fontSize: 12, flexShrink: 0 }}>–</span>
+                    <input type="time" className="fi" value={h.fin} disabled={!h.ouvert}
+                      onChange={e => updHoraire(j, 'fin', e.target.value)}
+                      style={{ flex: 1, padding: '7px 10px', fontSize: 13, opacity: h.ouvert ? 1 : 0.3, minWidth: 0 }} />
+                  </div>
+                );
+              })}
+            </div>
           </div>
+
           {err && <p style={{ color: '#E06060', fontSize: 14 }}>{err}</p>}
-          <button className="btn btn-b" onClick={() => { setErr(''); setStep(1); }}>Suivant →</button>
+          <button className="btn btn-b" onClick={() => { if (validateStep0()) setStep(1); }}>Suivant →</button>
         </div>
       )}
 
+      {/* ── Step 1 : Barbiers ── */}
       {step === 1 && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <label style={{ color: 'var(--text-dim)', fontSize: 14, flex: 1 }}>Nombre de barbiers dans votre salon</label>
+            <input className="fi" type="number" min={1} max={10} value={form.nbBarbiers} onChange={e => setNbBarbiers(e.target.value)} style={{ width: 72, textAlign: 'center' }} />
+          </div>
           {form.barbiers.slice(0, form.nbBarbiers).map((b, i) => (
-            <div key={i} style={{ background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 6, padding: 16 }}>
+            <div key={i} style={{ background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 12, padding: 16 }}>
               <h4 style={{ marginBottom: 12, color: 'var(--cream-dim)', fontSize: 15 }}>Barbier {i + 1}</h4>
-              <input className="fi" placeholder="Prénom du barbier" value={b.nom} onChange={e => updBarb(i, 'nom', e.target.value)} style={{ marginBottom: 12 }} />
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                {PRESTATIONS.map(p => (
-                  <div key={p}>
-                    <label style={{ fontSize: 13, color: 'var(--text-dim)', display: 'block', marginBottom: 3 }}>{p}</label>
-                    <div style={{ position: 'relative' }}>
-                      <input className="fi" type="number" placeholder="Prix €" min={0} value={b.tarifs[p] || ''} onChange={e => updTarif(i, p, e.target.value)} style={{ paddingRight: 28 }} />
-                      <span style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', fontSize: 13 }}>€</span>
-                    </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <input className="fi" placeholder="Prénom du barbier *" value={b.nom} onChange={e => updBarb(i, 'nom', e.target.value)} />
+                <input className="fi" placeholder="URL photo de profil (optionnel)" value={b.photo || ''} onChange={e => updBarb(i, 'photo', e.target.value)} />
+                {b.photo && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <img src={b.photo} alt="" style={{ width: 48, height: 48, borderRadius: '50%', objectFit: 'cover', border: '1px solid var(--border)' }} onError={e => { e.target.style.display = 'none'; }} />
+                    <span style={{ fontSize: 12, color: 'var(--text-dim)' }}>Aperçu de la photo</span>
                   </div>
-                ))}
+                )}
               </div>
             </div>
           ))}
+          <p style={{ color: 'var(--text-muted)', fontSize: 13, fontStyle: 'italic' }}>Les prestations et tarifs seront à renseigner depuis votre tableau de bord.</p>
           <div style={{ display: 'flex', gap: 10 }}>
             <button className="btn btn-o" onClick={() => setStep(0)}>← Retour</button>
             <button className="btn btn-b" onClick={() => setStep(2)}>Suivant →</button>
@@ -964,27 +1014,33 @@ function SalonRegistration({ onDone, onBack }) {
         </div>
       )}
 
+      {/* ── Step 2 : Forfait ── */}
       {step === 2 && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <p style={{ color: 'var(--text-dim)', marginBottom: 8 }}>Choisissez votre formule :</p>
-          {Object.values(FORFAITS).map(f => (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <p style={{ color: 'var(--text-dim)', marginBottom: 4 }}>Choisissez votre formule. Vous pouvez changer à tout moment.</p>
+          {[
+            { id: 'essentiel', label: 'Essentiel', prix: 49, color: '#8B7355',
+              desc: 'Votre salon est en ligne et vos clients peuvent réserver directement depuis l\'app. Parfait pour commencer.' },
+            { id: 'croissance', label: 'Croissance', prix: 99, color: '#B8860B',
+              desc: 'Tout l\'Essentiel, plus : rappels automatiques avant les RDV pour éviter les absences, et demandes d\'avis après chaque visite.' },
+            { id: 'premium', label: 'Premium', prix: 179, color: '#D4AF37',
+              desc: 'Le pack complet. En plus des rappels et avis, relancez automatiquement les clients qui ne sont pas revenus depuis un moment.' },
+            { id: 'reseau', label: 'Réseau', prix: 199, color: '#9C7BD0',
+              desc: 'Idéal pour les groupes qui gèrent plusieurs salons. 199 €/mois pour le premier salon, puis +50 € par salon supplémentaire. Toutes les fonctions Premium incluses.' },
+          ].map(f => (
             <div key={f.id} onClick={() => upd('forfait', f.id)}
-              style={{ padding: 16, border: `2px solid ${form.forfait === f.id ? f.color : 'var(--border)'}`, borderRadius: 8, cursor: 'pointer', background: form.forfait === f.id ? `${f.color}12` : 'transparent', transition: 'all .2s' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontFamily: "'Fraunces',serif", fontSize: 20, color: f.color, fontWeight: 600 }}>{f.nom}</span>
-                <span style={{ color: f.color, fontWeight: 700, fontSize: 20 }}>{f.prix} €<span style={{ fontSize: 13, fontWeight: 400, color: 'var(--text-dim)' }}>/mois</span></span>
+              style={{ padding: 18, border: `2px solid ${form.forfait === f.id ? f.color : 'var(--border)'}`, borderRadius: 12, cursor: 'pointer', background: form.forfait === f.id ? `${f.color}14` : 'var(--surface2)', transition: 'all .2s' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <span style={{ fontFamily: "'Fraunces',serif", fontSize: 20, color: f.color, fontWeight: 600 }}>{f.label}</span>
+                <span style={{ color: f.color, fontWeight: 700, fontSize: 22 }}>{f.prix} €<span style={{ fontSize: 13, fontWeight: 400, color: 'var(--text-dim)' }}> /mois</span></span>
               </div>
-              <div style={{ fontSize: 13, color: 'var(--text-dim)', marginTop: 6 }}>
-                {f.id === 'essentiel' && 'Fiche salon · Réservations IA · Espace gérant'}
-                {f.id === 'croissance' && 'Tout Essentiel + Rappels anti no-show · Demande d\'avis'}
-                {f.id === 'premium' && 'Tout Croissance + Relance clients inactifs · Envois automatiques'}
-              </div>
+              <p style={{ fontSize: 14, color: 'var(--text-dim)', lineHeight: 1.55, margin: 0 }}>{f.desc}</p>
             </div>
           ))}
           {err && <p style={{ color: '#E06060', fontSize: 14 }}>{err}</p>}
-          <div style={{ display: 'flex', gap: 10 }}>
+          <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
             <button className="btn btn-o" onClick={() => setStep(1)}>← Retour</button>
-            <button className="btn btn-b" onClick={submit}>Créer mon salon ✓</button>
+            <button className="btn btn-b" onClick={submit} style={{ flex: 1 }}>Créer mon salon</button>
           </div>
         </div>
       )}
@@ -1322,13 +1378,16 @@ function SalonDetail({ salon: initialSalon, client, onBack, onBook, onUpdateClie
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: 'var(--cream)', fontWeight: 700, fontSize: 15, flexShrink: 0, marginTop: 4 }}>★ {noteGlobale} <span style={{ color: 'var(--text-muted)', fontWeight: 400, fontSize: 13 }}>({avis.length})</span></span>
           )}
         </div>
-        <p className="afu s1" style={{ color: 'var(--text-dim)', fontSize: 15, marginBottom: 16 }}>{salon.adresse}, {salon.ville}</p>
+        <a className="afu s1" href={`https://maps.google.com/?q=${encodeURIComponent((salon.adresse||'')+', '+(salon.ville||'')+', La Réunion')}`} target="_blank" rel="noopener noreferrer"
+          style={{ display:'block', color:'var(--text-dim)', fontSize:15, marginBottom:16, textDecoration:'underline', textDecorationColor:'rgba(255,255,255,0.18)' }}>
+          <Icon name="pin" size={13} /> {salon.adresse}, {salon.ville}
+        </a>
 
         {/* Info pills */}
         <div className="afu s2" style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
           <span className="info-pill"><Icon name="users" size={14} /> {salon.barbiers?.length || 0} barbier{salon.barbiers?.length !== 1 ? 's' : ''}</span>
           <span className="info-pill"><Icon name="scissors" size={14} /> {totalPresta} prestations</span>
-          {salon.horaires && <span className="info-pill"><Icon name="clock" size={14} /> {salon.horaires}</span>}
+          {salon.horaires && <span className="info-pill"><Icon name="clock" size={14} /> {fmtHoraires(salon.horaires)}</span>}
           {salon.telephone && <span className="info-pill"><Icon name="phone" size={14} /> {salon.telephone}</span>}
         </div>
 
@@ -1732,18 +1791,19 @@ function SalonDashboard({ salon: initialSalon, onLogout }) {
   }
 
   const forfait = salon.forfait || 'essentiel';
-  const canCroissance = ['croissance', 'premium'].includes(forfait);
-  const canPremium = forfait === 'premium';
+  const canCroissance = ['croissance', 'premium', 'reseau'].includes(forfait);
+  const canPremium = ['premium', 'reseau'].includes(forfait);
 
   const lockIcon = <Icon name="lock" size={12} style={{ marginLeft: 5, opacity: .7 }} />;
   const allTabs = [
     { id: 'rdv', label: <L icon="list" size={15}>Agenda</L> },
-    { id: 'tarifs', label: <L icon="tag" size={15}>Tarifs</L> },
+    { id: 'tarifs', label: <L icon="tag" size={15}>Équipe</L> },
     { id: 'portfolio', label: <L icon="camera" size={15}>Galerie</L> },
     { id: 'rappels', label: <L icon="clock" size={15}>Rappels{!canCroissance ? lockIcon : null}</L> },
     { id: 'avis', label: <L icon="star" size={15}>Avis{!canCroissance ? lockIcon : null}</L> },
     { id: 'relance', label: <L icon="cycle" size={15}>Relance{!canPremium ? lockIcon : null}</L> },
     { id: 'stats', label: <L icon="chart" size={15}>Stats</L> },
+    { id: 'params', label: <L icon="settings" size={15}>Paramètres</L> },
   ];
 
   return (
@@ -1765,12 +1825,13 @@ function SalonDashboard({ salon: initialSalon, onLogout }) {
       <Tabs tabs={allTabs} active={tab} onChange={setTab} />
 
       {tab === 'rdv' && <AppointmentTab salon={salon} onRefresh={refresh} />}
-      {tab === 'tarifs' && <TariffTab salon={salon} onUpdate={s => { sset(`salon:${s.id}`, s); setSalon(s); }} />}
+      {tab === 'tarifs' && <EquipeTab salon={salon} onUpdate={s => { sset(`salon:${s.id}`, s); setSalon(s); }} />}
       {tab === 'portfolio' && <PortfolioTab salon={salon} onUpdate={s => { sset(`salon:${s.id}`, s); setSalon(s); }} />}
       {tab === 'rappels' && (!canCroissance ? <LockBadge plan="Croissance" /> : <RappelsTab salon={salon} />)}
       {tab === 'avis' && (!canCroissance ? <LockBadge plan="Croissance" /> : <AvisRequestTab salon={salon} />)}
       {tab === 'relance' && (!canPremium ? <LockBadge plan="Premium" /> : <RelanceTab salon={salon} />)}
-      {tab === 'stats' && <StatsTab salon={salon} />}
+      {tab === 'stats' && <StatsTab salon={salon} setSalon={s => { sset(`salon:${s.id}`, s); setSalon(s); }} />}
+      {tab === 'params' && <ParamsTab salon={salon} onUpdate={s => { sset(`salon:${s.id}`, s); setSalon(s); }} />}
     </div>
   );
 }
@@ -1887,40 +1948,69 @@ function WaitingSection({ salon }) {
   );
 }
 
-function TariffTab({ salon, onUpdate }) {
-  const [barbiers, setBarbiers] = useState(salon.barbiers || []);
+function EquipeTab({ salon, onUpdate }) {
+  const [barbiers, setBarbiers] = useState(() => (salon.barbiers || []).map(b => ({ nom: b.nom || '', photo: b.photo || '', tarifs: b.tarifs || {}, portfolio: b.portfolio || [] })));
   const [saved, setSaved] = useState(false);
 
+  function updField(bi, k, v) {
+    setBarbiers(prev => prev.map((b, i) => i !== bi ? b : { ...b, [k]: v }));
+  }
   function updTarif(bi, p, v) {
-    setBarbiers(prev => {
-      const b = prev.map((barb, i) => i !== bi ? barb : { ...barb, tarifs: { ...barb.tarifs, [p]: v === '' ? undefined : Number(v) } });
-      return b;
-    });
+    setBarbiers(prev => prev.map((b, i) => i !== bi ? b : { ...b, tarifs: { ...b.tarifs, [p]: v === '' ? undefined : Number(v) } }));
+  }
+  function addBarber() {
+    setBarbiers(prev => [...prev, { nom: '', photo: '', tarifs: {}, portfolio: [] }]);
+  }
+  function removeBarber(bi) {
+    if (barbiers.length <= 1) return;
+    setBarbiers(prev => prev.filter((_, i) => i !== bi));
   }
 
   function save() {
-    const updated = { ...salon, barbiers };
-    onUpdate(updated);
+    onUpdate({ ...salon, barbiers, nbBarbiers: barbiers.length });
     setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+    setTimeout(() => setSaved(false), 2500);
   }
 
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <h3 style={{ fontSize: 17 }}>Tarifs par barbier</h3>
-        <button className="btn btn-b btn-sm" onClick={save}>{saved ? '✓ Enregistré' : 'Enregistrer'}</button>
+        <h3 style={{ fontSize: 17 }}>Équipe & Tarifs</h3>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="btn btn-o btn-sm" onClick={addBarber}><Icon name="plus" size={14} /> Ajouter</button>
+          <button className="btn btn-b btn-sm" onClick={save}>{saved ? '✓ Enregistré' : 'Enregistrer'}</button>
+        </div>
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
         {barbiers.map((b, bi) => (
-          <div key={bi} style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 8, padding: 16 }}>
-            <h4 style={{ marginBottom: 12, color: 'var(--cream-dim)' }}>{b.nom}</h4>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(180px,1fr))', gap: 10 }}>
+          <div key={bi} style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 12, padding: 16 }}>
+            {/* Barber identity */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
+              {b.photo ? (
+                <img src={b.photo} alt="" style={{ width: 48, height: 48, borderRadius: '50%', objectFit: 'cover', border: '1px solid var(--border)', flexShrink: 0 }} onError={e => { e.target.style.display = 'none'; }} />
+              ) : (
+                <div style={{ width: 48, height: 48, borderRadius: '50%', background: 'var(--surface2)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <Icon name="user" size={20} style={{ color: 'var(--text-muted)' }} />
+                </div>
+              )}
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <input className="fi" placeholder="Prénom du barbier" value={b.nom} onChange={e => updField(bi, 'nom', e.target.value)} style={{ padding: '9px 12px' }} />
+                <input className="fi" placeholder="URL photo de profil (optionnel)" value={b.photo} onChange={e => updField(bi, 'photo', e.target.value)} style={{ padding: '9px 12px', fontSize: 13 }} />
+              </div>
+              {barbiers.length > 1 && (
+                <button onClick={() => removeBarber(bi)} className="btn btn-r btn-sm" style={{ flexShrink: 0 }} title="Supprimer ce barbier">
+                  <Icon name="trash" size={14} />
+                </button>
+              )}
+            </div>
+            {/* Tarifs */}
+            <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '.08em' }}>Tarifs</p>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(170px,1fr))', gap: 10 }}>
               {PRESTATIONS.map(p => (
                 <div key={p}>
                   <label style={{ fontSize: 13, color: 'var(--text-dim)', display: 'block', marginBottom: 3 }}>{p}</label>
                   <div style={{ position: 'relative' }}>
-                    <input className="fi" type="number" min={0} placeholder="0" value={b.tarifs?.[p] || ''} onChange={e => updTarif(bi, p, e.target.value)} style={{ paddingRight: 28 }} />
+                    <input className="fi" type="number" min={0} placeholder="—" value={b.tarifs?.[p] || ''} onChange={e => updTarif(bi, p, e.target.value)} style={{ paddingRight: 28 }} />
                     <span style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', fontSize: 13 }}>€</span>
                   </div>
                 </div>
@@ -1928,6 +2018,73 @@ function TariffTab({ salon, onUpdate }) {
             </div>
           </div>
         ))}
+      </div>
+    </div>
+  );
+}
+
+function ParamsTab({ salon, onUpdate }) {
+  const [form, setForm] = useState({
+    nom: salon.nom || '',
+    adresse: salon.adresse || '',
+    ville: salon.ville || '',
+    telephone: salon.telephone || '',
+    lienAvisGoogle: salon.lienAvisGoogle || '',
+    infos: salon.infos || '',
+    horaires: salon.horaires && typeof salon.horaires === 'object' ? salon.horaires : { ...HORAIRES_DEFAULT },
+  });
+  const [saved, setSaved] = useState(false);
+
+  const upd = (k, v) => setForm(f => ({ ...f, [k]: v }));
+  const updHoraire = (j, k, v) => setForm(f => ({ ...f, horaires: { ...f.horaires, [j]: { ...f.horaires[j], [k]: v } } }));
+
+  function save() {
+    onUpdate({ ...salon, ...form });
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2500);
+  }
+
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+        <h3 style={{ fontSize: 17 }}>Paramètres du salon</h3>
+        <button className="btn btn-b btn-sm" onClick={save}>{saved ? '✓ Enregistré' : 'Enregistrer'}</button>
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <input className="fi" placeholder="Nom du salon" value={form.nom} onChange={e => upd('nom', e.target.value)} />
+        <select className="fi" value={form.ville} onChange={e => upd('ville', e.target.value)}>
+          <option value="">Ville</option>
+          {VILLES.map(v => <option key={v}>{v}</option>)}
+        </select>
+        <input className="fi" placeholder="Adresse complète" value={form.adresse} onChange={e => upd('adresse', e.target.value)} />
+        <input className="fi" placeholder="Téléphone" value={form.telephone} onChange={e => upd('telephone', e.target.value)} />
+        <input className="fi" placeholder="Lien avis Google" value={form.lienAvisGoogle} onChange={e => upd('lienAvisGoogle', e.target.value)} />
+        <textarea className="fi" placeholder="Infos pratiques (parking, accès…)" value={form.infos} onChange={e => upd('infos', e.target.value)} rows={3} />
+
+        <div>
+          <label style={{ color: 'var(--text-dim)', fontSize: 13, display: 'block', marginBottom: 8 }}>Horaires d'ouverture</label>
+          <div style={{ background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden' }}>
+            {JOURS.map((j, idx) => {
+              const h = form.horaires[j] || { ouvert: false, debut: '09:00', fin: '19:00' };
+              return (
+                <div key={j} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 14px', borderBottom: idx < 6 ? '1px solid var(--border)' : 'none' }}>
+                  <span style={{ width: 88, fontSize: 14, fontWeight: 500, flexShrink: 0 }}>{JOURS_LABELS[j]}</span>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer', minWidth: 66, flexShrink: 0 }}>
+                    <input type="checkbox" checked={h.ouvert} onChange={e => updHoraire(j, 'ouvert', e.target.checked)} style={{ accentColor: 'var(--cream)', width: 14, height: 14 }} />
+                    <span style={{ fontSize: 12, color: h.ouvert ? 'var(--cream-dim)' : 'var(--text-muted)' }}>{h.ouvert ? 'Ouvert' : 'Fermé'}</span>
+                  </label>
+                  <input type="time" className="fi" value={h.debut} disabled={!h.ouvert}
+                    onChange={e => updHoraire(j, 'debut', e.target.value)}
+                    style={{ flex: 1, padding: '7px 10px', fontSize: 13, opacity: h.ouvert ? 1 : 0.3, minWidth: 0 }} />
+                  <span style={{ color: 'var(--text-muted)', fontSize: 12, flexShrink: 0 }}>–</span>
+                  <input type="time" className="fi" value={h.fin} disabled={!h.ouvert}
+                    onChange={e => updHoraire(j, 'fin', e.target.value)}
+                    style={{ flex: 1, padding: '7px 10px', fontSize: 13, opacity: h.ouvert ? 1 : 0.3, minWidth: 0 }} />
+                </div>
+              );
+            })}
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -1967,19 +2124,35 @@ function PortfolioTab({ salon, onUpdate }) {
 
 function BarberPortfolioEditor({ barber, onAddPhoto, onRemovePhoto }) {
   const [url, setUrl] = useState('');
+  const fileRef = useRef(null);
+
+  function handleFile(e) {
+    const files = Array.from(e.target.files || []);
+    files.forEach(file => {
+      const reader = new FileReader();
+      reader.onload = ev => onAddPhoto(ev.target.result);
+      reader.readAsDataURL(file);
+    });
+    e.target.value = '';
+  }
+
   return (
     <div style={{ marginBottom: 24 }}>
-      <h4 style={{ color: 'var(--cream-dim)', marginBottom: 10 }}>{barber.nom}</h4>
-      <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-        <input className="fi" placeholder="URL de la photo (avant/après)" value={url} onChange={e => setUrl(e.target.value)} style={{ flex: 1 }} />
-        <button className="btn btn-b btn-sm" onClick={() => { onAddPhoto(url); setUrl(''); }}>Ajouter</button>
+      <h4 style={{ color: 'var(--cream-dim)', marginBottom: 10 }}>{barber.nom || 'Barbier'}</h4>
+      <div style={{ display: 'flex', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
+        <input className="fi" placeholder="Coller une URL de photo (optionnel)" value={url} onChange={e => setUrl(e.target.value)} style={{ flex: '1 1 200px' }} />
+        <button className="btn btn-o btn-sm" onClick={() => { if (url.trim()) { onAddPhoto(url.trim()); setUrl(''); } }}>Ajouter URL</button>
       </div>
-      {(barber.portfolio || []).length === 0 && <p style={{ color: 'var(--text-muted)', fontSize: 14 }}>Aucune photo. Ajoutez des URLs.</p>}
+      <div style={{ marginBottom: 12 }}>
+        <input ref={fileRef} type="file" accept="image/*" multiple style={{ display: 'none' }} onChange={handleFile} />
+        <button className="btn btn-b btn-sm" onClick={() => fileRef.current?.click()}><Icon name="camera" size={14} /> Depuis l'appareil</button>
+      </div>
+      {(barber.portfolio || []).length === 0 && <p style={{ color: 'var(--text-muted)', fontSize: 14 }}>Aucune photo pour l'instant.</p>}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(100px,1fr))', gap: 8 }}>
         {(barber.portfolio || []).map((p, i) => (
           <div key={i} style={{ position: 'relative' }}>
             <img src={p} alt="" style={{ width: '100%', aspectRatio: '1', objectFit: 'cover', borderRadius: 6, border: '1px solid var(--border)' }} />
-            <button onClick={() => onRemovePhoto(i)} style={{ position: 'absolute', top: 4, right: 4, background: 'rgba(0,0,0,.7)', border: 'none', color: '#fff', borderRadius: '50%', width: 20, height: 20, fontSize: 12, cursor: 'pointer' }}>✕</button>
+            <button onClick={() => onRemovePhoto(i)} style={{ position: 'absolute', top: 4, right: 4, background: 'rgba(0,0,0,.7)', border: 'none', color: '#fff', borderRadius: '50%', width: 20, height: 20, fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
           </div>
         ))}
       </div>
@@ -2164,7 +2337,80 @@ function RelanceTab({ salon }) {
   );
 }
 
-function StatsTab({ salon }) {
+const MISE_EN_AVANT_PRIX = 29;
+
+function MiseEnAvantCard({ salon, onUpdate }) {
+  const [showModal, setShowModal] = useState(false);
+  const [paying, setPaying] = useState(false);
+  const [paid, setPaid] = useState(false);
+
+  function handlePay() {
+    setPaying(true);
+    setTimeout(() => {
+      setPaying(false);
+      setPaid(true);
+      onUpdate({ ...salon, miseEnAvant: true });
+      setTimeout(() => { setShowModal(false); setPaid(false); }, 1800);
+    }, 1500);
+  }
+
+  function deactivate() {
+    onUpdate({ ...salon, miseEnAvant: false });
+  }
+
+  return (
+    <div style={{ background: 'var(--card)', border: `1px solid ${salon.miseEnAvant ? 'var(--brass-dim)' : 'var(--border)'}`, borderRadius: 8, padding: 16 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
+        <div>
+          <h4 style={{ color: 'var(--cream-dim)', marginBottom: 4 }}>Mise en avant</h4>
+          <p style={{ color: 'var(--text-dim)', fontSize: 14, margin: 0 }}>
+            Votre salon apparaît en tête de la recherche dans votre ville. Visibilité maximale.
+          </p>
+        </div>
+        <span style={{ color: 'var(--cream)', fontWeight: 700, fontSize: 18, whiteSpace: 'nowrap', marginLeft: 16 }}>
+          {MISE_EN_AVANT_PRIX} €<span style={{ fontSize: 13, fontWeight: 400, color: 'var(--text-dim)' }}>/mois</span>
+        </span>
+      </div>
+      {salon.miseEnAvant ? (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span className="dispo-badge">● Actif — Votre salon est sponsorisé</span>
+          <button className="btn btn-r btn-sm" onClick={deactivate}>Désactiver</button>
+        </div>
+      ) : (
+        <button className="btn btn-b btn-sm" onClick={() => setShowModal(true)}>
+          <Icon name="bolt" size={14} /> Activer la mise en avant — {MISE_EN_AVANT_PRIX} €/mois
+        </button>
+      )}
+
+      {showModal && (
+        <Modal onClose={() => setShowModal(false)}>
+          <h3 style={{ marginBottom: 8 }}>Mise en avant</h3>
+          <p style={{ color: 'var(--text-dim)', fontSize: 14, marginBottom: 16 }}>
+            Votre salon <strong style={{ color: 'var(--cream)' }}>{salon.nom}</strong> sera affiché en tête de la liste de <strong style={{ color: 'var(--cream)' }}>{salon.ville}</strong> avec le badge « Sponsorisé ».
+          </p>
+          <div style={{ background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 10, padding: 14, marginBottom: 16 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, marginBottom: 6 }}>
+              <span style={{ color: 'var(--text-dim)' }}>Mise en avant mensuelle</span>
+              <span style={{ fontWeight: 700 }}>{MISE_EN_AVANT_PRIX},00 €</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: 'var(--text-muted)' }}>
+              <span>Renouvellement automatique, annulable à tout moment</span>
+            </div>
+          </div>
+          {paid ? (
+            <p style={{ color: 'var(--success)', textAlign: 'center', fontWeight: 600 }}>✓ Paiement confirmé — mise en avant activée !</p>
+          ) : (
+            <button className="btn btn-b" style={{ width: '100%' }} onClick={handlePay} disabled={paying}>
+              {paying ? <Spin /> : `Confirmer le paiement — ${MISE_EN_AVANT_PRIX} €`}
+            </button>
+          )}
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+function StatsTab({ salon, setSalon }) {
   const rdvs = getAllByPrefix('rdv:').filter(r => r.salonId === salon.id);
   const thisMonth = rdvs.filter(r => r.date?.startsWith(new Date().toISOString().slice(0, 7)));
   const caMonth = thisMonth.reduce((s, r) => s + (r.prix || 0), 0);
@@ -2195,16 +2441,7 @@ function StatsTab({ salon }) {
         </p>
       </div>
 
-      <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 8, padding: 16 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-          <h4 style={{ color: 'var(--cream-dim)' }}>Mise en avant</h4>
-          {salon.miseEnAvant
-            ? <Badge color="var(--brass)">● Actif — Sponsorisé</Badge>
-            : <button className="btn btn-b btn-sm" onClick={() => { const upd = { ...salon, miseEnAvant: true }; sset(`salon:${salon.id}`, upd); window.location.reload(); }}>Mettre en avant</button>
-          }
-        </div>
-        <p style={{ color: 'var(--text-dim)', fontSize: 14 }}>Votre salon apparaît en tête de l'annuaire de {salon.ville}. Visibilité maximale.</p>
-      </div>
+      <MiseEnAvantCard salon={salon} onUpdate={s => { sset(`salon:${s.id}`, s); setSalon(s); }} />
     </div>
   );
 }

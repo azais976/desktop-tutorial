@@ -1508,7 +1508,7 @@ function SalonDashboard({ salon: initialSalon, onLogout }) {
       {tab === 'rappels' && (!canCroissance ? <LockBadge plan="Croissance" /> : <RappelsTab salon={salon} />)}
       {tab === 'avis' && (!canCroissance ? <LockBadge plan="Croissance" /> : <AvisRequestTab salon={salon} />)}
       {tab === 'relance' && (!canPremium ? <LockBadge plan="Premium" /> : <RelanceTab salon={salon} />)}
-      {tab === 'stats' && <StatsTab salon={salon} />}
+      {tab === 'stats' && <StatsTab salon={salon} setSalon={s => { sset(`salon:${s.id}`, s); setSalon(s); }} />}
       {tab === 'params' && <ParamsTab salon={salon} onUpdate={s => { sset(`salon:${s.id}`, s); setSalon(s); }} />}
     </div>
   );
@@ -2015,7 +2015,80 @@ function RelanceTab({ salon }) {
   );
 }
 
-function StatsTab({ salon }) {
+const MISE_EN_AVANT_PRIX = 29;
+
+function MiseEnAvantCard({ salon, onUpdate }) {
+  const [showModal, setShowModal] = useState(false);
+  const [paying, setPaying] = useState(false);
+  const [paid, setPaid] = useState(false);
+
+  function handlePay() {
+    setPaying(true);
+    setTimeout(() => {
+      setPaying(false);
+      setPaid(true);
+      onUpdate({ ...salon, miseEnAvant: true });
+      setTimeout(() => { setShowModal(false); setPaid(false); }, 1800);
+    }, 1500);
+  }
+
+  function deactivate() {
+    onUpdate({ ...salon, miseEnAvant: false });
+  }
+
+  return (
+    <div style={{ background: 'var(--card)', border: `1px solid ${salon.miseEnAvant ? 'var(--brass-dim)' : 'var(--border)'}`, borderRadius: 8, padding: 16 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
+        <div>
+          <h4 style={{ color: 'var(--cream-dim)', marginBottom: 4 }}>Mise en avant</h4>
+          <p style={{ color: 'var(--text-dim)', fontSize: 14, margin: 0 }}>
+            Votre salon apparaît en tête de la recherche dans votre ville. Visibilité maximale.
+          </p>
+        </div>
+        <span style={{ color: 'var(--cream)', fontWeight: 700, fontSize: 18, whiteSpace: 'nowrap', marginLeft: 16 }}>
+          {MISE_EN_AVANT_PRIX} €<span style={{ fontSize: 13, fontWeight: 400, color: 'var(--text-dim)' }}>/mois</span>
+        </span>
+      </div>
+      {salon.miseEnAvant ? (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span className="dispo-badge">● Actif — Votre salon est sponsorisé</span>
+          <button className="btn btn-r btn-sm" onClick={deactivate}>Désactiver</button>
+        </div>
+      ) : (
+        <button className="btn btn-b btn-sm" onClick={() => setShowModal(true)}>
+          <Icon name="bolt" size={14} /> Activer la mise en avant — {MISE_EN_AVANT_PRIX} €/mois
+        </button>
+      )}
+
+      {showModal && (
+        <Modal onClose={() => setShowModal(false)}>
+          <h3 style={{ marginBottom: 8 }}>Mise en avant</h3>
+          <p style={{ color: 'var(--text-dim)', fontSize: 14, marginBottom: 16 }}>
+            Votre salon <strong style={{ color: 'var(--cream)' }}>{salon.nom}</strong> sera affiché en tête de la liste de <strong style={{ color: 'var(--cream)' }}>{salon.ville}</strong> avec le badge « Sponsorisé ».
+          </p>
+          <div style={{ background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 10, padding: 14, marginBottom: 16 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, marginBottom: 6 }}>
+              <span style={{ color: 'var(--text-dim)' }}>Mise en avant mensuelle</span>
+              <span style={{ fontWeight: 700 }}>{MISE_EN_AVANT_PRIX},00 €</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: 'var(--text-muted)' }}>
+              <span>Renouvellement automatique, annulable à tout moment</span>
+            </div>
+          </div>
+          {paid ? (
+            <p style={{ color: 'var(--success)', textAlign: 'center', fontWeight: 600 }}>✓ Paiement confirmé — mise en avant activée !</p>
+          ) : (
+            <button className="btn btn-b" style={{ width: '100%' }} onClick={handlePay} disabled={paying}>
+              {paying ? <Spin /> : `Confirmer le paiement — ${MISE_EN_AVANT_PRIX} €`}
+            </button>
+          )}
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+function StatsTab({ salon, setSalon }) {
   const rdvs = getAllByPrefix('rdv:').filter(r => r.salonId === salon.id);
   const thisMonth = rdvs.filter(r => r.date?.startsWith(new Date().toISOString().slice(0, 7)));
   const caMonth = thisMonth.reduce((s, r) => s + (r.prix || 0), 0);
@@ -2046,16 +2119,7 @@ function StatsTab({ salon }) {
         </p>
       </div>
 
-      <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 8, padding: 16 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-          <h4 style={{ color: 'var(--cream-dim)' }}>Mise en avant</h4>
-          {salon.miseEnAvant
-            ? <Badge color="var(--brass)">● Actif — Sponsorisé</Badge>
-            : <button className="btn btn-b btn-sm" onClick={() => { const upd = { ...salon, miseEnAvant: true }; sset(`salon:${salon.id}`, upd); window.location.reload(); }}>Mettre en avant</button>
-          }
-        </div>
-        <p style={{ color: 'var(--text-dim)', fontSize: 14 }}>Votre salon apparaît en tête de l'annuaire de {salon.ville}. Visibilité maximale.</p>
-      </div>
+      <MiseEnAvantCard salon={salon} onUpdate={s => { sset(`salon:${s.id}`, s); setSalon(s); }} />
     </div>
   );
 }
