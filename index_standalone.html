@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
   <title>BarberLink — Barbiers de La Réunion</title>
-  <meta name="description" content="Trouvez, comparez et réservez votre barbier en 3 clics." />
+  <meta name="description" content="Réservez votre barbier en 3 clics. Simple, immédiat, 24h/24." />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✂</text></svg>" />
@@ -19,7 +19,7 @@
     if (!window.storage) {
       var _s = {};
       window.storage = {
-        get: function(k) { if (!(k in _s)) throw new Error('Key not found: ' + k); return _s[k]; },
+        get: function(k) { if (!(k in _s)) throw new Error('Key not found'); return _s[k]; },
         set: function(k, v) { _s[k] = v; },
         delete: function(k) { delete _s[k]; },
         list: function() { return Object.keys(_s); }
@@ -92,6 +92,33 @@ input,textarea,select{font-family:inherit;}
 .bubble-ai{background:var(--surface2);border:1px solid var(--border);border-radius:4px 14px 14px 14px;padding:11px 15px;max-width:84%;}
 .bubble-u{background:var(--brass-pale);border:1px solid var(--brass-dim);border-radius:14px 4px 14px 14px;padding:11px 15px;max-width:84%;margin-left:auto;}
 @media(max-width:640px){h1{font-size:1.7rem;}h2{font-size:1.35rem;}.hide-sm{display:none!important;}}
+/* Hero search */
+.hero-search{background:var(--surface2);border:2px solid var(--border);border-radius:50px;display:flex;align-items:center;gap:0;overflow:hidden;transition:border-color .2s,box-shadow .2s;max-width:660px;width:100%;}
+.hero-search:focus-within{border-color:var(--brass);box-shadow:0 0 0 3px rgba(184,134,11,.12);}
+.hero-search input{background:none;border:none;color:var(--text);padding:14px 20px;font-size:16px;outline:none;flex:1;min-width:0;}
+.hero-search input::placeholder{color:var(--text-muted);}
+.hero-search .sep{width:1px;height:28px;background:var(--border);flex-shrink:0;}
+.hero-search select{background:none;border:none;color:var(--text-dim);padding:14px 16px;font-size:15px;outline:none;cursor:pointer;min-width:0;}
+.hero-search .search-btn{background:var(--brass);border:none;color:var(--bg);padding:10px 22px;margin:5px;border-radius:40px;font-size:15px;font-weight:700;cursor:pointer;white-space:nowrap;transition:background .2s;}
+.hero-search .search-btn:hover{background:var(--brass-light);}
+/* Category chips */
+.cat-chip{display:inline-flex;align-items:center;gap:7px;padding:10px 18px;border-radius:50px;border:1px solid var(--border);background:var(--surface2);color:var(--text-dim);font-size:14px;cursor:pointer;transition:all .2s;white-space:nowrap;}
+.cat-chip:hover,.cat-chip.active{background:var(--brass-pale);border-color:var(--brass);color:var(--brass);}
+/* Salon card cover */
+.salon-cover{width:100%;height:130px;border-radius:6px 6px 0 0;display:flex;align-items:center;justify-content:center;font-family:'Playfair Display',serif;font-size:48px;font-weight:900;letter-spacing:-.02em;overflow:hidden;position:relative;flex-shrink:0;}
+/* Dispo badge */
+.dispo-badge{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:20px;font-size:12px;font-weight:700;background:#3D7A5420;color:#7DC89A;border:1px solid #3D7A5440;}
+.dispo-badge::before{content:'';width:6px;height:6px;border-radius:50%;background:#7DC89A;display:inline-block;}
+/* Slot picker */
+.slot-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(72px,1fr));gap:8px;margin-top:10px;}
+.slot-btn{padding:8px 4px;border-radius:6px;border:1px solid var(--border);background:var(--surface2);color:var(--text-dim);font-size:14px;cursor:pointer;text-align:center;transition:all .15s;}
+.slot-btn:hover:not(:disabled){border-color:var(--brass);color:var(--brass);background:var(--brass-pale);}
+.slot-btn.selected{background:var(--brass);color:var(--bg);border-color:var(--brass);font-weight:700;}
+.slot-btn:disabled{opacity:.35;cursor:not-allowed;}
+/* Pro section */
+.pro-section{background:var(--surface);border-top:1px solid var(--border);padding:60px 24px;text-align:center;}
+/* Stat cards */
+.stat-card{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:20px;text-align:center;flex:1;min-width:120px;}
 `;
 
 // ============================================================
@@ -276,38 +303,103 @@ function PoleHeader({ onAdmin }) {
 // ============================================================
 // LANDING
 // ============================================================
-function LandingScreen({ onClient, onSalon }) {
+const CATEGORIES = [
+  { icon: '✂', label: 'Coupe', prestation: 'Coupe homme' },
+  { icon: '🧔', label: 'Barbe', prestation: 'Barbe' },
+  { icon: '👦', label: 'Enfant', prestation: 'Coupe enfant' },
+  { icon: '🎨', label: 'Coloration', prestation: 'Teinture / Coloration' },
+  { icon: '✏️', label: 'Dessin', prestation: 'Dessin / Tracé' },
+  { icon: '💇', label: 'Femme', prestation: 'Coupe femme' },
+];
+
+function LandingScreen({ onClient, onSalon, onSearch }) {
+  const [searchPresta, setSearchPresta] = useState('');
+  const [searchVille, setSearchVille] = useState('');
+
+  function doSearch(prestation, ville) {
+    onSearch({ prestation: prestation || searchPresta, ville: ville || searchVille });
+  }
+
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 24, textAlign: 'center' }}>
-      <div className="afu" style={{ marginBottom: 20 }}>
-        <div style={{ display: 'flex', justifyContent: 'center', gap: 16, marginBottom: 20 }}>
-          {[0,1,2].map(i => <div key={i} className="pole" style={{ height: 80, animationDelay: `${i * 0.3}s` }} />)}
+    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+      {/* HERO */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '48px 24px 40px', textAlign: 'center' }}>
+        <div className="afu" style={{ display: 'flex', justifyContent: 'center', gap: 14, marginBottom: 28 }}>
+          {[0,1,2].map(i => <div key={i} className="pole" style={{ height: 64, animationDelay: `${i * 0.3}s` }} />)}
         </div>
-        <h1 style={{ fontSize: 'clamp(2.2rem,6vw,3.5rem)', fontWeight: 900, letterSpacing: '.03em' }}>BarberLink</h1>
-        <p style={{ color: 'var(--cream-dim)', fontSize: 20, fontStyle: 'italic', marginTop: 6 }}>La plateforme des barbiers de La Réunion</p>
+
+        <h1 className="afu s1" style={{ fontSize: 'clamp(2.4rem,7vw,4rem)', fontWeight: 900, letterSpacing: '.02em', marginBottom: 10 }}>
+          Réservez votre barbier<br /><span style={{ color: 'var(--brass)' }}>en 3 clics</span>
+        </h1>
+        <p className="afu s2" style={{ color: 'var(--text-dim)', fontSize: 18, marginBottom: 36 }}>
+          Simple · Immédiat · 24h/24 — La Réunion
+        </p>
+
+        {/* Search bar */}
+        <div className="afu s2" style={{ width: '100%', maxWidth: 660, marginBottom: 28 }}>
+          <div className="hero-search">
+            <input placeholder="Quelle prestation ?" value={searchPresta} onChange={e => setSearchPresta(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && doSearch()} />
+            <div className="sep" />
+            <select value={searchVille} onChange={e => setSearchVille(e.target.value)}>
+              <option value="">Toute la Réunion</option>
+              {VILLES.map(v => <option key={v}>{v}</option>)}
+            </select>
+            <button className="search-btn" onClick={() => doSearch()}>Rechercher</button>
+          </div>
+        </div>
+
+        {/* Category chips */}
+        <div className="afu s3" style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'center', marginBottom: 48 }}>
+          {CATEGORIES.map(c => (
+            <button key={c.label} className="cat-chip" onClick={() => doSearch(c.prestation, '')}>
+              <span>{c.icon}</span> {c.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Stats */}
+        <div className="afu s4" style={{ display: 'flex', gap: 16, flexWrap: 'wrap', justifyContent: 'center', marginBottom: 40 }}>
+          {[
+            { val: '12+', label: 'Salons inscrits' },
+            { val: '180', label: 'RDV ce mois' },
+            { val: '4.8★', label: 'Note moyenne' },
+            { val: '24h/24', label: 'Réservation' },
+          ].map(s => (
+            <div key={s.label} className="stat-card">
+              <div style={{ fontSize: 26, fontWeight: 900, color: 'var(--brass)', fontFamily: "'Playfair Display',serif" }}>{s.val}</div>
+              <div style={{ fontSize: 13, color: 'var(--text-dim)', marginTop: 3 }}>{s.label}</div>
+            </div>
+          ))}
+        </div>
+
+        <div className="afu s4" style={{ display: 'flex', gap: 14, flexWrap: 'wrap', justifyContent: 'center' }}>
+          <button onClick={onClient} className="btn btn-b btn-lg">✂ Trouver un barbier</button>
+          <button onClick={onSalon} className="btn btn-o btn-lg">🏪 Espace salon</button>
+        </div>
       </div>
 
-      <div className="divider" style={{ width: 200, margin: '24px auto' }} />
-
-      <p className="afu s1" style={{ color: 'var(--text-dim)', maxWidth: 480, marginBottom: 40, fontSize: 18 }}>
-        Trouvez votre barbier idéal · Réservez en 3 clics · Gérez votre salon avec l'IA
-      </p>
-
-      <div className="afu s2" style={{ display: 'flex', gap: 20, flexWrap: 'wrap', justifyContent: 'center' }}>
-        <button onClick={onClient} className="btn btn-b btn-lg" style={{ minWidth: 200 }}>
-          ✂ Je suis client
-        </button>
-        <button onClick={onSalon} className="btn btn-o btn-lg" style={{ minWidth: 200 }}>
-          🏪 Je suis un salon
-        </button>
-      </div>
-
-      <div className="afu s3" style={{ marginTop: 60, display: 'flex', gap: 32, flexWrap: 'wrap', justifyContent: 'center', color: 'var(--text-dim)', fontSize: 15 }}>
-        {['12 salons inscrits','180 RDV ce mois','4.8 ★ de moyenne'].map(s => (
-          <span key={s} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <span style={{ color: 'var(--brass)' }}>◆</span> {s}
-          </span>
-        ))}
+      {/* PRO SECTION */}
+      <div className="pro-section">
+        <div style={{ maxWidth: 700, margin: '0 auto' }}>
+          <h2 style={{ fontSize: 'clamp(1.5rem,4vw,2.2rem)', marginBottom: 14 }}>Vous êtes barbier ou gérant ?</h2>
+          <p style={{ color: 'var(--text-dim)', fontSize: 17, marginBottom: 28, maxWidth: 520, margin: '0 auto 28px' }}>
+            Rejoignez la plateforme. Agenda IA, rappels automatiques, relance clients, statistiques — tout en un.
+          </p>
+          <div style={{ display: 'flex', gap: 20, justifyContent: 'center', flexWrap: 'wrap', marginBottom: 32 }}>
+            {[
+              { icon: '📅', txt: 'Agenda digital temps réel' },
+              { icon: '🤖', txt: 'Assistant IA 24h/24' },
+              { icon: '⏰', txt: 'Rappels anti no-show' },
+              { icon: '📊', txt: 'Stats & CA mensuel' },
+            ].map(f => (
+              <div key={f.txt} style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--text-dim)', fontSize: 15 }}>
+                <span style={{ fontSize: 20 }}>{f.icon}</span> {f.txt}
+              </div>
+            ))}
+          </div>
+          <button onClick={onSalon} className="btn btn-b">Inscrire mon salon gratuitement →</button>
+        </div>
       </div>
     </div>
   );
@@ -316,7 +408,7 @@ function LandingScreen({ onClient, onSalon }) {
 // ============================================================
 // CLIENT REGISTRATION
 // ============================================================
-function ClientRegistration({ onDone, onBack }) {
+function ClientRegistration({ onDone, onBack, subtitle }) {
   const [nom, setNom] = useState('');
   const [tel, setTel] = useState('');
   const [err, setErr] = useState('');
@@ -333,7 +425,8 @@ function ClientRegistration({ onDone, onBack }) {
     <div style={{ maxWidth: 420, margin: '0 auto', padding: 24 }}>
       <button onClick={onBack} className="btn btn-o btn-sm" style={{ marginBottom: 20 }}>← Retour</button>
       <h2 className="afu" style={{ marginBottom: 6 }}>Créer mon compte client</h2>
-      <p className="afu s1" style={{ color: 'var(--text-dim)', marginBottom: 28, fontSize: 15 }}>Gratuit · Sans carte bancaire</p>
+      <p className="afu s1" style={{ color: 'var(--text-dim)', marginBottom: subtitle ? 8 : 28, fontSize: 15 }}>Gratuit · Sans carte bancaire</p>
+      {subtitle && <p className="afu s1" style={{ color: 'var(--brass)', fontSize: 13, marginBottom: 20, background: 'var(--brass-pale)', padding: '5px 10px', borderRadius: 4, border: '1px solid var(--brass-dim)' }}>🔍 {subtitle}</p>}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
         <input className="fi" placeholder="Votre prénom et nom" value={nom} onChange={e => setNom(e.target.value)} />
         <input className="fi" placeholder="Numéro de téléphone" value={tel} onChange={e => setTel(e.target.value)} type="tel" />
@@ -470,101 +563,277 @@ function SalonRegistration({ onDone, onBack }) {
 // ============================================================
 // SALON DIRECTORY
 // ============================================================
-function SalonDirectory({ client, onSelectSalon, onAccount }) {
+function SalonDirectory({ client, onSelectSalon, onAccount, initialPresta, initialVille }) {
   const [salons, setSalons] = useState([]);
-  const [ville, setVille] = useState('');
+  const [ville, setVille] = useState(initialVille || '');
   const [tri, setTri] = useState('note');
   const [dispoAujourd, setDispoAujourd] = useState(false);
   const [search, setSearch] = useState('');
+  const [filterPresta, setFilterPresta] = useState(initialPresta || '');
 
-  useEffect(() => {
-    setSalons(getAllByPrefix('salon:'));
-  }, []);
+  useEffect(() => { setSalons(getAllByPrefix('salon:')); }, []);
 
   function getNote(id) {
-    const avis = getAllByPrefix('avis:').filter(a => a.salonId === id);
-    return avgNote(avis);
+    return avgNote(getAllByPrefix('avis:').filter(a => a.salonId === id));
   }
 
   function hasDispo(s) {
-    const rdvs = getAllByPrefix('rdv:').filter(r => r.salonId === s.id && r.date === today() && r.statut !== 'annulé');
-    const booked = rdvs.map(r => r.heure);
+    const booked = getAllByPrefix('rdv:').filter(r => r.salonId === s.id && r.date === today() && r.statut !== 'annulé').map(r => r.heure);
     return HEURES.some(h => !booked.includes(h));
+  }
+
+  function matchesPresta(s) {
+    if (!filterPresta) return true;
+    return (s.barbiers || []).some(b => b.tarifs?.[filterPresta]);
   }
 
   let list = salons.filter(s => {
     if (ville && s.ville !== ville) return false;
     if (dispoAujourd && !hasDispo(s)) return false;
     if (search && !s.nom.toLowerCase().includes(search.toLowerCase())) return false;
+    if (!matchesPresta(s)) return false;
     return true;
-  });
-
-  list = list.sort((a, b) => {
+  }).sort((a, b) => {
     if (tri === 'note') return getNote(b.id) - getNote(a.id);
     if (tri === 'prix') {
-      const prixMin = s => Math.min(...(s.barbiers || []).flatMap(b => Object.values(b.tarifs || {})).filter(Boolean));
-      return prixMin(a) - prixMin(b);
+      const pm = s => Math.min(...(s.barbiers || []).flatMap(b => Object.values(b.tarifs || {})).filter(Boolean));
+      return pm(a) - pm(b);
     }
     return 0;
   });
-
-  // Sponsored first
   list = [...list.filter(s => s.miseEnAvant), ...list.filter(s => !s.miseEnAvant)];
 
   return (
-    <div style={{ maxWidth: 800, margin: '0 auto', padding: '24px 16px' }}>
+    <div style={{ maxWidth: 900, margin: '0 auto', padding: '24px 16px' }}>
+      {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20, flexWrap: 'wrap', gap: 10 }}>
         <div>
           <h2 className="afu">Barbiers à La Réunion</h2>
-          <p style={{ color: 'var(--text-dim)', fontSize: 15 }}>Bonjour {client.nom} — {list.length} salon{list.length !== 1 ? 's' : ''} trouvé{list.length !== 1 ? 's' : ''}</p>
+          <p style={{ color: 'var(--text-dim)', fontSize: 15 }}>
+            Bonjour {client.nom} — <strong style={{ color: 'var(--brass)' }}>{list.length}</strong> salon{list.length !== 1 ? 's' : ''} trouvé{list.length !== 1 ? 's' : ''}
+          </p>
         </div>
         <button className="btn btn-o btn-sm" onClick={onAccount}>Mon compte →</button>
       </div>
 
-      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 16 }}>
-        <input className="fi" placeholder="Rechercher un salon…" value={search} onChange={e => setSearch(e.target.value)} style={{ flex: '1 1 180px', minWidth: 0 }} />
-        <select className="fi" value={ville} onChange={e => setVille(e.target.value)} style={{ flex: '0 0 auto', width: 'auto' }}>
-          <option value="">Toutes les villes</option>
-          {VILLES.map(v => <option key={v}>{v}</option>)}
-        </select>
-        <select className="fi" value={tri} onChange={e => setTri(e.target.value)} style={{ flex: '0 0 auto', width: 'auto' }}>
-          <option value="note">Trier par note</option>
-          <option value="prix">Trier par prix</option>
-        </select>
+      {/* Search + filters */}
+      <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: 16, marginBottom: 16 }}>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 12 }}>
+          <input className="fi" placeholder="🔍 Rechercher un salon…" value={search} onChange={e => setSearch(e.target.value)} style={{ flex: '1 1 180px', minWidth: 0 }} />
+          <select className="fi" value={ville} onChange={e => setVille(e.target.value)} style={{ flex: '0 0 auto', width: 'auto' }}>
+            <option value="">Toutes les villes</option>
+            {VILLES.map(v => <option key={v}>{v}</option>)}
+          </select>
+          <select className="fi" value={tri} onChange={e => setTri(e.target.value)} style={{ flex: '0 0 auto', width: 'auto' }}>
+            <option value="note">Mieux notés</option>
+            <option value="prix">Prix croissant</option>
+          </select>
+        </div>
+        {/* Category chips */}
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+          <button className={`cat-chip${filterPresta === '' ? ' active' : ''}`} onClick={() => setFilterPresta('')}>Tous</button>
+          {CATEGORIES.map(c => (
+            <button key={c.label} className={`cat-chip${filterPresta === c.prestation ? ' active' : ''}`} onClick={() => setFilterPresta(filterPresta === c.prestation ? '' : c.prestation)}>
+              {c.icon} {c.label}
+            </button>
+          ))}
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', color: dispoAujourd ? 'var(--brass)' : 'var(--text-muted)', fontSize: 13, marginLeft: 4 }}>
+            <input type="checkbox" checked={dispoAujourd} onChange={e => setDispoAujourd(e.target.checked)} style={{ accentColor: 'var(--brass)' }} />
+            Dispo aujourd'hui
+          </label>
+        </div>
       </div>
-      <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', marginBottom: 20, color: 'var(--text-dim)', fontSize: 15 }}>
-        <input type="checkbox" checked={dispoAujourd} onChange={e => setDispoAujourd(e.target.checked)} style={{ accentColor: 'var(--brass)', width: 16, height: 16 }} />
-        Disponible aujourd'hui
-      </label>
 
       {list.length === 0 && <p style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '40px 0' }}>Aucun salon trouvé.</p>}
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-        {list.map((s, i) => <SalonCard key={s.id} salon={s} note={getNote(s.id)} onSelect={() => onSelectSalon(s)} index={i} />)}
+      {/* Grid */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(260px,1fr))', gap: 16 }}>
+        {list.map((s, i) => (
+          <SalonCard key={s.id} salon={s} note={getNote(s.id)} onSelect={() => onSelectSalon(s)} index={i} hasDispo={hasDispo(s)} />
+        ))}
       </div>
     </div>
   );
 }
 
-function SalonCard({ salon, note, onSelect, index }) {
+const COVER_GRADIENTS = [
+  'linear-gradient(135deg,#2a1508,#4a2010)',
+  'linear-gradient(135deg,#0a1a10,#1a3a20)',
+  'linear-gradient(135deg,#0a0a1a,#1a1a3a)',
+  'linear-gradient(135deg,#1a0a10,#3a1020)',
+  'linear-gradient(135deg,#1a1000,#3a2800)',
+];
+
+function SalonCard({ salon, note, onSelect, index, hasDispo }) {
+  const prestations = [...new Set((salon.barbiers || []).flatMap(b => Object.keys(b.tarifs || {}).filter(k => b.tarifs[k])))];
   const prixMin = Math.min(...(salon.barbiers || []).flatMap(b => Object.values(b.tarifs || {})).filter(v => v > 0));
+  const grad = COVER_GRADIENTS[index % COVER_GRADIENTS.length];
+  const initial = (salon.nom || '?')[0].toUpperCase();
+
   return (
     <div className={`card-hover afu s${Math.min(index + 1, 5)}`} onClick={onSelect}
-      style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 8, padding: 16, cursor: 'pointer', display: 'flex', gap: 14, alignItems: 'flex-start' }}>
-      <div style={{ width: 52, height: 52, background: 'var(--surface2)', borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 24, border: '1px solid var(--border)' }}>✂</div>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 4 }}>
-          <h3 style={{ fontSize: 17, fontWeight: 700 }}>{salon.nom}</h3>
-          {salon.miseEnAvant && <span className="badge-sponsored">Sponsorisé</span>}
+      style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 10, cursor: 'pointer', overflow: 'hidden' }}>
+      {/* Cover */}
+      <div className="salon-cover" style={{ background: grad }}>
+        <span style={{ color: 'rgba(184,134,11,0.25)', userSelect: 'none' }}>{initial}</span>
+        {salon.miseEnAvant && (
+          <span className="badge-sponsored" style={{ position: 'absolute', top: 10, left: 10 }}>Sponsorisé</span>
+        )}
+        {hasDispo && (
+          <span className="dispo-badge" style={{ position: 'absolute', top: 10, right: 10 }}>Disponible</span>
+        )}
+      </div>
+      {/* Info */}
+      <div style={{ padding: '12px 14px 14px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
+          <h3 style={{ fontSize: 16, fontWeight: 700, flex: 1 }}>{salon.nom}</h3>
+          {note > 0 && <span style={{ color: '#D4AF37', fontSize: 13, whiteSpace: 'nowrap', marginLeft: 8 }}>★ {note}</span>}
         </div>
-        <p style={{ color: 'var(--text-dim)', fontSize: 14 }}>{salon.ville} · {salon.adresse}</p>
-        <div style={{ display: 'flex', gap: 14, marginTop: 6, flexWrap: 'wrap', fontSize: 14, alignItems: 'center' }}>
-          {note > 0 && <span><StarRow n={note} size={13} /> <span style={{ color: 'var(--text-dim)' }}>{note}</span></span>}
-          {prixMin && isFinite(prixMin) && <span style={{ color: 'var(--cream-dim)' }}>À partir de {prixMin} €</span>}
-          <span style={{ color: 'var(--text-muted)' }}>{salon.barbiers?.length || 0} barbier{salon.barbiers?.length !== 1 ? 's' : ''}</span>
+        <p style={{ color: 'var(--text-dim)', fontSize: 13, marginBottom: 8 }}>📍 {salon.ville} · {salon.adresse}</p>
+        {/* Service tags */}
+        <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginBottom: 10 }}>
+          {prestations.slice(0, 4).map(p => (
+            <span key={p} style={{ fontSize: 11, padding: '2px 7px', borderRadius: 20, background: 'var(--surface2)', color: 'var(--text-dim)', border: '1px solid var(--border)' }}>{p}</span>
+          ))}
+          {prestations.length > 4 && <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>+{prestations.length - 4}</span>}
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span style={{ color: 'var(--cream-dim)', fontSize: 14 }}>
+            {prixMin && isFinite(prixMin) ? `Dès ${prixMin} €` : ''}
+            <span style={{ color: 'var(--text-muted)', marginLeft: 8 }}>{salon.barbiers?.length || 0} barbier{salon.barbiers?.length !== 1 ? 's' : ''}</span>
+          </span>
+          <span style={{ color: 'var(--brass)', fontSize: 20 }}>›</span>
         </div>
       </div>
-      <span style={{ color: 'var(--brass)', fontSize: 22, flexShrink: 0 }}>›</span>
+    </div>
+  );
+}
+
+// ============================================================
+// QUICK BOOK (slot picker visuel — inspiré Planity)
+// ============================================================
+function QuickBook({ salon, preselectedBarbier, client, onConfirmed }) {
+  const [barbier, setBarbier] = useState(preselectedBarbier || salon.barbiers?.[0]?.nom || '');
+  const [prestation, setPrestation] = useState('');
+  const [dateIdx, setDateIdx] = useState(0);
+  const [heure, setHeure] = useState('');
+  const [confirmed, setConfirmed] = useState(null);
+  const [step, setStep] = useState(0); // 0=prestation, 1=datetime, 2=confirm
+
+  const days = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(); d.setDate(d.getDate() + i);
+    return d.toISOString().split('T')[0];
+  });
+  const selectedDate = days[dateIdx];
+
+  const barbierObj = (salon.barbiers || []).find(b => b.nom === barbier);
+  const prestations = barbierObj ? Object.entries(barbierObj.tarifs || {}).filter(([, v]) => v).map(([k]) => k) : [];
+
+  const bookedAtDate = getAllByPrefix('rdv:')
+    .filter(r => r.salonId === salon.id && r.barbier === barbier && r.date === selectedDate && r.statut !== 'annulé')
+    .map(r => r.heure);
+
+  const slots = HEURES.filter(h => {
+    const [hh, mm] = h.split(':').map(Number);
+    const slotDate = new Date(selectedDate);
+    slotDate.setHours(hh, mm);
+    return slotDate > new Date();
+  });
+
+  function confirm() {
+    const id = 'rdv_' + uid();
+    const prix = barbierObj?.tarifs?.[prestation] || 0;
+    const rdv = { id, salonId: salon.id, barbier, prestation, prix, date: selectedDate, heure, clientId: client?.id || 'anon', clientNom: client?.nom || 'Client', clientTel: client?.telephone || '', statut: 'en attente', createdAt: new Date().toISOString() };
+    sset(`rdv:${id}`, rdv);
+    if (client) {
+      const upd = { ...client, historique: [...(client.historique || []), id] };
+      sset(`client:${client.id}`, upd);
+    }
+    setConfirmed(rdv);
+    onConfirmed(rdv);
+  }
+
+  if (confirmed) return (
+    <div style={{ background: '#3D7A5420', border: '1px solid var(--success)', borderRadius: 10, padding: 20, textAlign: 'center' }}>
+      <div style={{ fontSize: 36, marginBottom: 10 }}>✓</div>
+      <h3 style={{ color: '#7DC89A', marginBottom: 8 }}>RDV confirmé !</h3>
+      <p style={{ color: 'var(--text-dim)' }}>{confirmed.prestation} avec <strong>{confirmed.barbier}</strong></p>
+      <p style={{ color: 'var(--text-dim)' }}>{fmtDate(confirmed.date)} à {confirmed.heure} · {confirmed.prix} €</p>
+    </div>
+  );
+
+  const dayNames = ['Dim','Lun','Mar','Mer','Jeu','Ven','Sam'];
+
+  return (
+    <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: 18 }}>
+      <h3 style={{ fontSize: 17, marginBottom: 16 }}>Réserver un créneau</h3>
+
+      {/* Barbier selector */}
+      {(salon.barbiers || []).length > 1 && (
+        <div style={{ marginBottom: 14 }}>
+          <label style={{ fontSize: 13, color: 'var(--text-dim)', display: 'block', marginBottom: 6 }}>Barbier</label>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {(salon.barbiers || []).map(b => (
+              <button key={b.nom} onClick={() => { setBarbier(b.nom); setPrestation(''); setHeure(''); }}
+                className={`cat-chip${barbier === b.nom ? ' active' : ''}`} style={{ padding: '7px 14px' }}>
+                {b.nom}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Prestation */}
+      <div style={{ marginBottom: 14 }}>
+        <label style={{ fontSize: 13, color: 'var(--text-dim)', display: 'block', marginBottom: 6 }}>Prestation</label>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          {prestations.map(p => (
+            <button key={p} onClick={() => { setPrestation(p); setHeure(''); }}
+              className={`cat-chip${prestation === p ? ' active' : ''}`} style={{ padding: '7px 14px', fontSize: 13 }}>
+              {p} · <strong>{barbierObj?.tarifs[p]} €</strong>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {prestation && <>
+        {/* Date selector */}
+        <div style={{ marginBottom: 14 }}>
+          <label style={{ fontSize: 13, color: 'var(--text-dim)', display: 'block', marginBottom: 6 }}>Date</label>
+          <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 4 }}>
+            {days.map((d, i) => {
+              const dd = new Date(d);
+              return (
+                <button key={d} onClick={() => { setDateIdx(i); setHeure(''); }}
+                  style={{ flexShrink: 0, padding: '8px 14px', borderRadius: 8, border: `1px solid ${dateIdx === i ? 'var(--brass)' : 'var(--border)'}`, background: dateIdx === i ? 'var(--brass-pale)' : 'var(--surface2)', color: dateIdx === i ? 'var(--brass)' : 'var(--text-dim)', cursor: 'pointer', textAlign: 'center', minWidth: 58 }}>
+                  <div style={{ fontSize: 11, marginBottom: 2 }}>{dayNames[dd.getDay()]}</div>
+                  <div style={{ fontWeight: 700, fontSize: 16 }}>{dd.getDate()}</div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Slots */}
+        <div style={{ marginBottom: 16 }}>
+          <label style={{ fontSize: 13, color: 'var(--text-dim)', display: 'block', marginBottom: 6 }}>Créneau disponible</label>
+          <div className="slot-grid">
+            {slots.map(h => (
+              <button key={h} disabled={bookedAtDate.includes(h)} onClick={() => setHeure(h)}
+                className={`slot-btn${heure === h ? ' selected' : ''}`}>
+                {bookedAtDate.includes(h) ? <s style={{ opacity: .4 }}>{h}</s> : h}
+              </button>
+            ))}
+          </div>
+          {slots.length === 0 && <p style={{ color: 'var(--text-muted)', fontSize: 14 }}>Pas de créneaux ce jour.</p>}
+        </div>
+
+        {heure && (
+          <button className="btn btn-b" style={{ width: '100%' }} onClick={confirm}>
+            Confirmer — {prestation} avec {barbier} le {fmtDate(selectedDate)} à {heure} · {barbierObj?.tarifs[prestation]} €
+          </button>
+        )}
+      </>}
     </div>
   );
 }
@@ -595,7 +864,7 @@ function SalonDetail({ salon: initialSalon, client, onBack, onBook, onUpdateClie
     setIsFav(!isFav);
   }
 
-  const tabs = [{ id: 'barbiers', label: '✂ Barbiers & Tarifs' }, { id: 'portfolio', label: '📸 Réalisations' }, { id: 'avis', label: `⭐ Avis (${avis.length})` }];
+  const tabs = [{ id: 'reserver', label: '📅 Réserver' }, { id: 'barbiers', label: '✂ Barbiers & Tarifs' }, { id: 'portfolio', label: '📸 Réalisations' }, { id: 'avis', label: `⭐ Avis (${avis.length})` }];
 
   return (
     <div style={{ maxWidth: 760, margin: '0 auto', padding: '24px 16px' }}>
@@ -630,6 +899,16 @@ function SalonDetail({ salon: initialSalon, client, onBack, onBook, onUpdateClie
       </div>
 
       <Tabs tabs={tabs} active={tab} onChange={setTab} />
+
+      {tab === 'reserver' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <QuickBook salon={salon} preselectedBarbier={null} client={client} onConfirmed={() => {}} />
+          <div style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: 14 }}>
+            — ou —&nbsp;
+            <button className="btn btn-o btn-sm" onClick={() => onBook(salon, null)}>💬 Réserver avec l'assistant IA</button>
+          </div>
+        </div>
+      )}
 
       {tab === 'barbiers' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -913,7 +1192,14 @@ function ClientAccount({ client, onUpdateClient, onBack, onRebook }) {
                 </div>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start', flexWrap: 'wrap' }}>
                   <StatutBadge statut={r.statut} />
-                  <button className="btn btn-o btn-sm" onClick={() => onRebook(r)}>Re-réserver</button>
+                  <button className="btn btn-o btn-sm" onClick={() => onRebook(r)}>↻ Re-réserver</button>
+                  {r.date >= today() && r.statut !== 'annulé' && (
+                    <button className="btn btn-r btn-sm" onClick={() => {
+                      const upd = { ...r, statut: 'annulé' };
+                      sset(`rdv:${r.id}`, upd);
+                      setRdvs(prev => prev.map(x => x.id === r.id ? upd : x));
+                    }}>Annuler</button>
+                  )}
                   {r.date < today() && r.statut !== 'annulé' && (
                     <button className="btn btn-o btn-sm" onClick={() => setNewAvis(r)}>⭐ Avis</button>
                   )}
@@ -1604,9 +1890,10 @@ function App() {
   const [client, setClient] = useState(null);
   const [salon, setSalon] = useState(null);
   const [selectedSalon, setSelectedSalon] = useState(null);
-  const [bookingTarget, setBookingTarget] = useState(null); // { salon, barbier }
+  const [bookingTarget, setBookingTarget] = useState(null);
   const [adminAuth, setAdminAuth] = useState(false);
   const [adminModal, setAdminModal] = useState(false);
+  const [searchParams, setSearchParams] = useState({ prestation: '', ville: '' });
 
   useEffect(() => {
     // Inject CSS
@@ -1650,6 +1937,7 @@ function App() {
           <LandingScreen
             onClient={() => setScreen('client-login')}
             onSalon={() => setScreen('salon-login')}
+            onSearch={params => { setSearchParams(params); setScreen('client-login-search'); }}
           />
         )}
 
@@ -1657,6 +1945,14 @@ function App() {
           <ClientRegistration
             onDone={c => { setClient(c); setScreen('directory'); }}
             onBack={() => setScreen('landing')}
+          />
+        )}
+
+        {screen === 'client-login-search' && (
+          <ClientRegistration
+            onDone={c => { setClient(c); setScreen('directory'); }}
+            onBack={() => setScreen('landing')}
+            subtitle={`Recherche : ${searchParams.prestation || 'tous services'}${searchParams.ville ? ' · ' + searchParams.ville : ''}`}
           />
         )}
 
@@ -1680,6 +1976,8 @@ function App() {
             client={client}
             onSelectSalon={s => { setSelectedSalon(s); setScreen('salon-detail'); }}
             onAccount={() => setScreen('account')}
+            initialPresta={searchParams.prestation}
+            initialVille={searchParams.ville}
           />
         )}
 
