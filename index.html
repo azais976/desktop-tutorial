@@ -2,10 +2,25 @@
 <html lang="fr">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>BarberLink — La plateforme des barbiers de La Réunion</title>
   <meta name="description" content="Trouvez, comparez et réservez votre barbier en 3 clics. Plateforme multi-salons pour La Réunion." />
+
+  <!-- PWA : installation sur l'écran d'accueil -->
+  <link rel="manifest" href="./manifest.json" />
+  <meta name="theme-color" content="#0a0a0b" />
+  <link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png" />
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✂</text></svg>" />
+
+  <!-- iOS : ajout à l'écran d'accueil, plein écran -->
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="BarberLink" />
+  <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
+
+  <!-- Android / Windows -->
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="application-name" content="BarberLink" />
   <style>
     body { margin: 0; background: #0c0804; }
     #root { min-height: 100vh; }
@@ -51,6 +66,17 @@
     const { createRoot } = ReactDOM;
     const root = createRoot(document.getElementById('root'));
     root.render(React.createElement(App.default || App));
+  </script>
+
+  <!-- Enregistrement du service worker (PWA hors-ligne + installable) -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', function () {
+        navigator.serviceWorker.register('./sw.js').catch(function (err) {
+          console.warn('Service worker non enregistré :', err);
+        });
+      });
+    }
   </script>
 </body>
 </html>

@@ -18,6 +18,7 @@
     if (!window.storage) { var _s={}; window.storage={get:function(k){if(!(k in _s))throw new Error('nf');return _s[k];},set:function(k,v){_s[k]=v;},delete:function(k){delete _s[k];},list:function(){return Object.keys(_s);}}; }
   </script>
   <script type="text/babel" data-presets="react">
+const { useState, useEffect, useRef } = React;
 
 // ============================================================
 // CONSTANTS
@@ -195,6 +196,33 @@ function promoLabel(promo) {
   return promo.type === 'eur' ? `−${promo.reduction} €` : `−${promo.reduction} %`;
 }
 
+// Paiement — chaque salon peut activer le paiement en ligne via un lien de
+// paiement (Stripe Payment Link, PayPlug, SumUp…). Aucun serveur requis : le
+// client est redirigé vers la page sécurisée du prestataire.
+const PAIEMENT_PROVIDERS = {
+  stripe:  { id: 'stripe',  nom: 'Stripe',  modes: 'CB · Visa · Mastercard · Apple Pay · Google Pay' },
+  payplug: { id: 'payplug', nom: 'PayPlug', modes: 'CB · Visa · Mastercard · Apple Pay' },
+  sumup:   { id: 'sumup',   nom: 'SumUp',   modes: 'CB · Apple Pay · Google Pay' },
+  autre:   { id: 'autre',   nom: 'Autre lien', modes: 'Paiement en ligne sécurisé' },
+};
+// Renvoie la config de paiement normalisée d'un salon
+function getPaiement(salon) {
+  const p = salon?.paiement || {};
+  return {
+    active: !!p.active && !!p.lien,
+    lien: p.lien || '',
+    provider: p.provider || 'stripe',
+    mode: p.mode || 'acompte',      // 'acompte' (% à la résa) ou 'total'
+    acompte: p.acompte != null ? p.acompte : 30, // % d'acompte
+  };
+}
+// Montant à régler en ligne selon le mode (acompte partiel ou total)
+function montantEnLigne(prix, pai) {
+  if (!prix) return 0;
+  if (pai.mode === 'total') return prix;
+  return Math.max(1, Math.round(prix * (pai.acompte / 100)));
+}
+
 // ============================================================
 // ICONS (elegant thin line — no emoji)
 // ============================================================
@@ -229,6 +257,9 @@ const ICONS = {
   settings: <g><circle cx="12" cy="12" r="2.8"/><path d="M19.1 14.4l.9 1.6-2 2-1.6-.9a6.5 6.5 0 0 1-2.2.9L14 20h-3l-.2-1.9a6.5 6.5 0 0 1-2.2-.9l-1.6.9-2-2 .9-1.6a6.5 6.5 0 0 1-.9-2.2L4 12v-1l.1-.5.1-.7a6.5 6.5 0 0 1 .9-2.2L4.2 6 6 4l1.6.9a6.5 6.5 0 0 1 2.2-.9L10 2h3l.2 1.9a6.5 6.5 0 0 1 2.2.9L17 3.8 19 6l-.9 1.6c.4.7.7 1.4.9 2.2L21 10v3l-1.9.2a6.5 6.5 0 0 1-.9 2.2z"/></g>,
   plus: <g><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></g>,
   trash: <g><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></g>,
+  card: <g><rect x="2.5" y="5" width="19" height="14" rx="2.5"/><line x1="2.5" y1="9.5" x2="21.5" y2="9.5"/><line x1="6" y1="14.5" x2="10" y2="14.5"/></g>,
+  shield: <g><path d="M12 3l7 3v5c0 4.4-3 7.8-7 9-4-1.2-7-4.6-7-9V6l7-3z"/><polyline points="9 12 11.5 14.5 16 9.5"/></g>,
+  external: <g><path d="M14 4h6v6"/><line x1="20" y1="4" x2="11" y2="13"/><path d="M18 14v5a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 4 19V8a1.5 1.5 0 0 1 1.5-1.5h5"/></g>,
 };
 
 function Icon({ name, size = 17, stroke = 1.5, style }) {
@@ -944,6 +975,65 @@ function SalonCard({ salon, note, onSelect, index, hasDispo }) {
 // ============================================================
 // QUICK BOOK (slot picker visuel — inspiré Planity)
 // ============================================================
+// Encadré paiement affiché après la confirmation d'un RDV.
+// Si le salon a activé le paiement en ligne, propose « Payer en ligne »
+// (redirige vers le lien sécurisé du prestataire) sinon « Paiement sur place ».
+function PaiementBox({ salon, rdv }) {
+  const pai = getPaiement(salon);
+  const [done, setDone] = useState(false);
+
+  if (!pai.active) {
+    return (
+      <div style={{ marginTop: 14, fontSize: 13.5, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 7, justifyContent: 'center' }}>
+        <Icon name="info" size={15} /> Paiement sur place le jour du rendez-vous.
+      </div>
+    );
+  }
+
+  const prov = PAIEMENT_PROVIDERS[pai.provider] || PAIEMENT_PROVIDERS.stripe;
+  const aPayer = montantEnLigne(rdv.prix, pai);
+  const reste = rdv.prix - aPayer;
+
+  function payer() {
+    let url = pai.lien;
+    // On transmet la référence du RDV + l'e-mail pour faciliter le suivi côté prestataire
+    const sep = url.includes('?') ? '&' : '?';
+    const params = [`client_reference_id=${encodeURIComponent(rdv.id)}`];
+    if (rdv.clientEmail) params.push(`prefilled_email=${encodeURIComponent(rdv.clientEmail)}`);
+    url = url + sep + params.join('&');
+    window.open(url, '_blank', 'noopener');
+    setDone(true);
+  }
+
+  return (
+    <div style={{ marginTop: 16, background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 12, padding: 16, textAlign: 'left' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+        <span style={{ fontWeight: 600, fontSize: 15, display: 'flex', alignItems: 'center', gap: 7 }}>
+          <Icon name="card" size={16} /> {pai.mode === 'total' ? 'Régler ma prestation' : 'Verser un acompte'}
+        </span>
+        <span style={{ fontWeight: 700, fontSize: 18, color: 'var(--cream)' }}>{aPayer} €</span>
+      </div>
+      {pai.mode === 'acompte' && reste > 0 && (
+        <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 10 }}>
+          Acompte de {pai.acompte} % maintenant — il restera <strong style={{ color: 'var(--cream-dim)' }}>{reste} €</strong> à régler sur place.
+        </p>
+      )}
+      {done ? (
+        <p style={{ color: 'var(--success)', textAlign: 'center', fontWeight: 600, margin: '6px 0' }}>
+          ✓ Page de paiement {prov.nom} ouverte dans un nouvel onglet
+        </p>
+      ) : (
+        <button className="btn btn-b" style={{ width: '100%' }} onClick={payer}>
+          <Icon name="external" size={15} /> Payer {aPayer} € en ligne
+        </button>
+      )}
+      <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 10, textAlign: 'center', display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'center' }}>
+        <Icon name="shield" size={13} /> Paiement sécurisé {prov.nom} · {prov.modes}
+      </p>
+    </div>
+  );
+}
+
 function QuickBook({ salon, preselectedBarbier, client, onConfirmed }) {
   const [barbier, setBarbier] = useState(preselectedBarbier || salon.barbiers?.[0]?.nom || '');
   const [prestation, setPrestation] = useState('');
@@ -994,6 +1084,7 @@ function QuickBook({ salon, preselectedBarbier, client, onConfirmed }) {
       <h3 style={{ color: '#7DC89A', marginBottom: 8 }}>RDV confirmé !</h3>
       <p style={{ color: 'var(--text-dim)' }}>{confirmed.prestation} avec <strong>{confirmed.barbier}</strong></p>
       <p style={{ color: 'var(--text-dim)' }}>{fmtDate(confirmed.date)} à {confirmed.heure} · {confirmed.prix} €{confirmed.promo ? ` (${confirmed.promo})` : ''}</p>
+      <PaiementBox salon={salon} rdv={confirmed} />
     </div>
   );
 
@@ -1393,6 +1484,7 @@ puis confirme au client.`;
             {rdvConfirmed.prestation} avec {rdvConfirmed.barbier} · {fmtDate(rdvConfirmed.date)} à {rdvConfirmed.heure}
             {rdvConfirmed.prix ? ` · ${rdvConfirmed.prix} €` : ''}{rdvConfirmed.promo ? ` (${rdvConfirmed.promo})` : ''}
           </p>
+          <PaiementBox salon={salon} rdv={rdvConfirmed} />
         </div>
       )}
 
@@ -1709,6 +1801,7 @@ function SalonDashboard({ salon: initialSalon, onLogout }) {
     { id: 'rappels', label: <L icon="clock" size={15}>Rappels{!canCroissance ? lockIcon : null}</L> },
     { id: 'avis', label: <L icon="star" size={15}>Avis{!canCroissance ? lockIcon : null}</L> },
     { id: 'relance', label: <L icon="cycle" size={15}>Relance{!canPremium ? lockIcon : null}</L> },
+    { id: 'paiements', label: <L icon="card" size={15}>Paiements</L> },
     { id: 'stats', label: <L icon="chart" size={15}>Stats</L> },
     { id: 'params', label: <L icon="settings" size={15}>Paramètres</L> },
   ];
@@ -1762,6 +1855,7 @@ function SalonDashboard({ salon: initialSalon, onLogout }) {
       {tab === 'rappels' && (!canCroissance ? <LockBadge plan="Croissance" /> : <RappelsTab salon={salon} />)}
       {tab === 'avis' && (!canCroissance ? <LockBadge plan="Croissance" /> : <AvisRequestTab salon={salon} />)}
       {tab === 'relance' && (!canPremium ? <LockBadge plan="Premium" /> : <RelanceTab salon={salon} />)}
+      {tab === 'paiements' && <PaiementsTab salon={salon} onUpdate={s => { sset(`salon:${s.id}`, s); setSalon(s); }} />}
       {tab === 'stats' && <StatsTab salon={salon} setSalon={s => { sset(`salon:${s.id}`, s); setSalon(s); }} />}
       {tab === 'params' && <ParamsTab salon={salon} onUpdate={s => { sset(`salon:${s.id}`, s); setSalon(s); }} />}
     </div>
@@ -2065,6 +2159,110 @@ function ParamsTab({ salon, onUpdate }) {
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+function PaiementsTab({ salon, onUpdate }) {
+  const pai = getPaiement(salon);
+  const [form, setForm] = useState({
+    active: pai.active,
+    provider: pai.provider,
+    lien: pai.lien,
+    mode: pai.mode,
+    acompte: pai.acompte,
+  });
+  const [saved, setSaved] = useState(false);
+  const upd = (k, v) => setForm(f => ({ ...f, [k]: v }));
+
+  function save() {
+    const lien = form.lien.trim();
+    onUpdate({ ...salon, paiement: { active: form.active && !!lien, provider: form.provider, lien, mode: form.mode, acompte: Number(form.acompte) } });
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2500);
+  }
+
+  const prov = PAIEMENT_PROVIDERS[form.provider] || PAIEMENT_PROVIDERS.stripe;
+  const lienOk = /^https?:\/\//i.test(form.lien.trim());
+
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+        <h3 style={{ fontSize: 17 }}>Paiements en ligne</h3>
+        <button className="btn btn-b btn-sm" onClick={save}>{saved ? '✓ Enregistré' : 'Enregistrer'}</button>
+      </div>
+      <p style={{ color: 'var(--text-dim)', fontSize: 14, marginBottom: 18 }}>
+        Encaissez vos clients en ligne — l'argent arrive directement sur votre compte bancaire. Activez un acompte à la réservation pour réduire les rendez-vous non honorés.
+      </p>
+
+      {/* Activation */}
+      <div style={{ background: 'var(--surface2)', border: `1px solid ${form.active ? 'var(--success)' : 'var(--border)'}`, borderRadius: 12, padding: 16, marginBottom: 16 }}>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
+          <input type="checkbox" checked={form.active} onChange={e => upd('active', e.target.checked)} style={{ accentColor: 'var(--success)', width: 18, height: 18 }} />
+          <span style={{ fontWeight: 600, fontSize: 15 }}><Icon name="card" size={16} style={{ marginRight: 4 }} /> Activer le paiement en ligne</span>
+        </label>
+      </div>
+
+      {form.active && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {/* Prestataire */}
+          <div>
+            <label style={{ fontSize: 13, color: 'var(--text-dim)', display: 'block', marginBottom: 8 }}>Prestataire de paiement</label>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {Object.values(PAIEMENT_PROVIDERS).map(p => (
+                <button key={p.id} onClick={() => upd('provider', p.id)}
+                  className={`cat-chip${form.provider === p.id ? ' active' : ''}`} style={{ padding: '8px 14px' }}>
+                  {p.nom}
+                </button>
+              ))}
+            </div>
+            <p style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 8 }}>
+              Modes acceptés : <span style={{ color: 'var(--cream-dim)' }}>{prov.modes}</span>
+            </p>
+          </div>
+
+          {/* Lien de paiement */}
+          <div>
+            <label style={{ fontSize: 13, color: 'var(--text-dim)', display: 'block', marginBottom: 6 }}>
+              Lien de paiement {prov.nom}
+            </label>
+            <input className="fi" placeholder="https://buy.stripe.com/..." value={form.lien} onChange={e => upd('lien', e.target.value)} />
+            <p style={{ fontSize: 12.5, color: 'var(--text-muted)', marginTop: 6, lineHeight: 1.5 }}>
+              Créez un « lien de paiement » dans votre tableau de bord {prov.nom} (gratuit, sans code), puis collez-le ici. Le client sera redirigé vers la page sécurisée de {prov.nom} pour régler par {prov.modes.split(' · ')[0]}, Apple&nbsp;Pay, etc.
+            </p>
+            {form.lien && !lienOk && (
+              <p style={{ fontSize: 12.5, color: 'var(--danger)', marginTop: 4 }}>Le lien doit commencer par https://</p>
+            )}
+          </div>
+
+          {/* Mode : acompte ou total */}
+          <div>
+            <label style={{ fontSize: 13, color: 'var(--text-dim)', display: 'block', marginBottom: 8 }}>Que paie le client à la réservation ?</label>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: form.mode === 'acompte' ? 12 : 0 }}>
+              <button onClick={() => upd('mode', 'acompte')} className={`cat-chip${form.mode === 'acompte' ? ' active' : ''}`} style={{ padding: '8px 14px' }}>Un acompte</button>
+              <button onClick={() => upd('mode', 'total')} className={`cat-chip${form.mode === 'total' ? ' active' : ''}`} style={{ padding: '8px 14px' }}>La totalité</button>
+            </div>
+            {form.mode === 'acompte' && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ fontSize: 13, color: 'var(--text-dim)' }}>Montant de l'acompte :</span>
+                <div style={{ position: 'relative', width: 100 }}>
+                  <input type="number" className="fi" min={5} max={100} step={5} value={form.acompte} onChange={e => upd('acompte', e.target.value)} style={{ paddingRight: 28 }} />
+                  <span style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', fontSize: 13 }}>%</span>
+                </div>
+                <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>du prix de la prestation</span>
+              </div>
+            )}
+          </div>
+
+          {/* Note sécurité */}
+          <div style={{ background: 'rgba(76,140,106,.1)', border: '1px solid rgba(76,140,106,.3)', borderRadius: 10, padding: '12px 14px', fontSize: 13, color: '#8FC9A8', display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+            <Icon name="shield" size={18} style={{ flexShrink: 0, marginTop: 1 }} />
+            <span style={{ color: 'var(--text-dim)' }}>
+              Le paiement est traité par {prov.nom}, certifié PCI-DSS. BarberLink ne stocke jamais les données bancaires. Les virements arrivent sur votre compte selon le calendrier de {prov.nom}.
+            </span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -2716,6 +2914,7 @@ function App() {
   );
 }
 
-</script>
+    ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(App));
+  </script>
 </body>
 </html>
