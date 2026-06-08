@@ -17,78 +17,84 @@ const HEURES = ['08:00','08:30','09:00','09:30','10:00','10:30','11:00','11:30',
 // GLOBAL CSS
 // ============================================================
 const CSS = `
-@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400&family=Crimson+Text:wght@400;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Archivo:ital,wght@0,400;0,500;0,600;0,700;0,800;0,900;1,400;1,600;1,700&family=Manrope:wght@400;500;600;700&display=swap');
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
 :root{
-  --bg:#0c0804;--surface:#160c05;--surface2:#1e1008;--card:#1a0e07;--card2:#221408;
-  --brass:#B8860B;--brass-light:#D4A520;--brass-dim:rgba(184,134,11,0.4);--brass-pale:rgba(184,134,11,0.08);
-  --bordeaux:#6B2030;--bordeaux-light:#8B3040;
-  --cream:#F2DEB8;--cream-dim:#C4965E;--text:#EDD8A8;--text-dim:#9A7B50;--text-muted:#5A4025;
-  --success:#3D7A54;--danger:#8B2020;--border:rgba(184,134,11,0.22);
+  --bg:#0a0a0b;--surface:#121214;--surface2:#1a1a1d;--card:#161618;--card2:#1e1e22;
+  --cream:#EFE3C8;--cream-light:#F6EEDB;--cream-dim:#C9BC9E;--cream-pale:rgba(239,227,200,0.07);
+  --brass:#EFE3C8;--brass-light:#F6EEDB;--brass-dim:rgba(239,227,200,0.3);--brass-pale:rgba(239,227,200,0.07);
+  --bordeaux:#3a2a22;--bordeaux-light:#4a362c;
+  --text:#F2F2F0;--text-dim:#9A9A98;--text-muted:#5E5E5C;
+  --success:#4C8C6A;--danger:#B04848;--border:rgba(255,255,255,0.1);
 }
-body{background:var(--bg);color:var(--text);font-family:'Crimson Text',Georgia,serif;font-size:17px;line-height:1.65;min-height:100vh;
-  background-image:radial-gradient(ellipse at top,rgba(184,134,11,0.04) 0%,transparent 55%);}
-h1,h2,h3,h4{font-family:'Playfair Display',Georgia,serif;color:var(--cream);letter-spacing:.02em;line-height:1.25;}
+body{background:var(--bg);color:var(--text);font-family:'Manrope',system-ui,sans-serif;font-size:16px;line-height:1.6;min-height:100vh;-webkit-font-smoothing:antialiased;}
+h1,h2,h3,h4{font-family:'Archivo',system-ui,sans-serif;color:var(--text);letter-spacing:-.02em;line-height:1.08;font-weight:800;}
 button{cursor:pointer;font-family:inherit;}
 input,textarea,select{font-family:inherit;}
-::-webkit-scrollbar{width:5px;}::-webkit-scrollbar-track{background:var(--surface);}::-webkit-scrollbar-thumb{background:var(--brass-dim);border-radius:3px;}
+::-webkit-scrollbar{width:5px;height:5px;}::-webkit-scrollbar-track{background:var(--surface);}::-webkit-scrollbar-thumb{background:rgba(255,255,255,.15);border-radius:3px;}
 @keyframes fadeInUp{from{opacity:0;transform:translateY(18px);}to{opacity:1;transform:translateY(0);}}
 @keyframes fadeIn{from{opacity:0;}to{opacity:1;}}
 @keyframes poleMove{from{background-position:0 0;}to{background-position:0 60px;}}
 @keyframes spin{from{transform:rotate(0deg);}to{transform:rotate(360deg);}}
-@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(184,134,11,.35);}50%{box-shadow:0 0 0 8px rgba(184,134,11,0);}}
-.afu{animation:fadeInUp .5s ease both;}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(239,227,200,.3);}50%{box-shadow:0 0 0 8px rgba(239,227,200,0);}}
+.afu{animation:fadeInUp .5s cubic-bezier(.2,.8,.2,1) both;}
 .af{animation:fadeIn .35s ease both;}
 .s1{animation-delay:.05s;}.s2{animation-delay:.1s;}.s3{animation-delay:.15s;}.s4{animation-delay:.2s;}.s5{animation-delay:.25s;}
-.card-hover{transition:transform .2s,box-shadow .2s,border-color .2s;}
-.card-hover:hover{transform:translateY(-2px);box-shadow:0 8px 30px rgba(0,0,0,.5),0 0 20px rgba(184,134,11,.12);border-color:var(--brass)!important;}
-.pole{width:10px;border-radius:5px;background:repeating-linear-gradient(0deg,#CC2222 0,#CC2222 10px,#F5F5F5 10px,#F5F5F5 20px,#1A4F9A 20px,#1A4F9A 30px);animation:poleMove 1.8s linear infinite;}
-.divider{height:1px;background:linear-gradient(90deg,transparent,var(--brass),transparent);margin:14px 0;}
-.fi{background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:4px;padding:9px 13px;width:100%;font-size:16px;transition:border-color .2s,box-shadow .2s;outline:none;}
-.fi:focus{border-color:var(--brass);box-shadow:0 0 0 2px rgba(184,134,11,.12);}
+.card-hover{transition:transform .25s cubic-bezier(.2,.8,.2,1),box-shadow .25s,border-color .2s;}
+.card-hover:hover{transform:translateY(-3px);box-shadow:0 12px 40px rgba(0,0,0,.5);border-color:rgba(255,255,255,.2)!important;}
+.pole{width:9px;border-radius:5px;background:repeating-linear-gradient(0deg,#CC2222 0,#CC2222 10px,#F5F5F5 10px,#F5F5F5 20px,#1A4F9A 20px,#1A4F9A 30px);animation:poleMove 1.8s linear infinite;}
+.divider{height:1px;background:var(--border);margin:14px 0;}
+.fi{background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:12px;padding:12px 15px;width:100%;font-size:15px;transition:border-color .2s,box-shadow .2s;outline:none;}
+.fi:focus{border-color:var(--cream-dim);box-shadow:0 0 0 3px rgba(239,227,200,.08);}
 .fi::placeholder{color:var(--text-muted);}
 .fi option{background:var(--card2);}
-.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:9px 20px;border-radius:4px;font-size:15px;font-weight:600;letter-spacing:.04em;border:none;transition:all .2s;}
-.btn-b{background:var(--brass);color:var(--bg);}
-.btn-b:hover{background:var(--brass-light);box-shadow:0 4px 14px rgba(184,134,11,.35);transform:translateY(-1px);}
-.btn-o{background:transparent;color:var(--brass);border:1px solid var(--brass-dim);}
-.btn-o:hover{background:var(--brass-pale);border-color:var(--brass);}
-.btn-r{background:var(--bordeaux);color:var(--cream);}
-.btn-r:hover{background:var(--bordeaux-light);transform:translateY(-1px);}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;padding:12px 24px;border-radius:12px;font-size:15px;font-weight:700;letter-spacing:-.01em;border:none;transition:all .2s;font-family:'Archivo',sans-serif;}
+.btn-b{background:var(--cream);color:#1a1a16;}
+.btn-b:hover{background:var(--cream-light);transform:translateY(-1px);}
+.btn-o{background:rgba(255,255,255,.06);color:var(--text);border:1px solid var(--border);}
+.btn-o:hover{background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.25);}
+.btn-r{background:rgba(176,72,72,.15);color:#E89090;border:1px solid rgba(176,72,72,.3);}
+.btn-r:hover{background:rgba(176,72,72,.25);}
 .btn-g{background:var(--success);color:#fff;}
-.btn-g:hover{filter:brightness(1.15);}
-.btn-sm{padding:6px 14px;font-size:13px;}
-.btn-lg{padding:13px 30px;font-size:17px;}
-.bubble-ai{background:var(--surface2);border:1px solid var(--border);border-radius:4px 14px 14px 14px;padding:11px 15px;max-width:84%;}
-.bubble-u{background:var(--brass-pale);border:1px solid var(--brass-dim);border-radius:14px 4px 14px 14px;padding:11px 15px;max-width:84%;margin-left:auto;}
-@media(max-width:640px){h1{font-size:1.7rem;}h2{font-size:1.35rem;}.hide-sm{display:none!important;}}
+.btn-g:hover{filter:brightness(1.12);}
+.btn-sm{padding:8px 16px;font-size:13px;border-radius:10px;}
+.btn-lg{padding:16px 32px;font-size:16px;border-radius:14px;}
+.bubble-ai{background:var(--surface2);border:1px solid var(--border);border-radius:6px 16px 16px 16px;padding:12px 16px;max-width:84%;}
+.bubble-u{background:var(--cream);color:#1a1a16;border-radius:16px 6px 16px 16px;padding:12px 16px;max-width:84%;margin-left:auto;}
+@media(max-width:640px){h1{font-size:2rem;}h2{font-size:1.5rem;}.hide-sm{display:none!important;}}
+/* Icon square button (back/fav) */
+.icon-sq{width:42px;height:42px;border-radius:12px;background:rgba(20,20,22,.7);backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,.12);color:var(--text);display:inline-flex;align-items:center;justify-content:center;font-size:18px;cursor:pointer;transition:all .2s;flex-shrink:0;}
+.icon-sq:hover{background:rgba(30,30,34,.9);}
+/* Info pill */
+.info-pill{display:inline-flex;align-items:center;gap:6px;padding:8px 13px;border-radius:10px;background:var(--surface2);border:1px solid var(--border);font-size:13px;color:var(--text-dim);font-weight:600;}
 /* Hero search */
-.hero-search{background:var(--surface2);border:2px solid var(--border);border-radius:50px;display:flex;align-items:center;gap:0;overflow:hidden;transition:border-color .2s,box-shadow .2s;max-width:660px;width:100%;}
-.hero-search:focus-within{border-color:var(--brass);box-shadow:0 0 0 3px rgba(184,134,11,.12);}
-.hero-search input{background:none;border:none;color:var(--text);padding:14px 20px;font-size:16px;outline:none;flex:1;min-width:0;}
+.hero-search{background:var(--surface2);border:1px solid var(--border);border-radius:16px;display:flex;align-items:center;gap:0;overflow:hidden;transition:border-color .2s,box-shadow .2s;max-width:660px;width:100%;}
+.hero-search:focus-within{border-color:var(--cream-dim);box-shadow:0 0 0 3px rgba(239,227,200,.08);}
+.hero-search input{background:none;border:none;color:var(--text);padding:16px 20px;font-size:15px;outline:none;flex:1;min-width:0;}
 .hero-search input::placeholder{color:var(--text-muted);}
 .hero-search .sep{width:1px;height:28px;background:var(--border);flex-shrink:0;}
-.hero-search select{background:none;border:none;color:var(--text-dim);padding:14px 16px;font-size:15px;outline:none;cursor:pointer;min-width:0;}
-.hero-search .search-btn{background:var(--brass);border:none;color:var(--bg);padding:10px 22px;margin:5px;border-radius:40px;font-size:15px;font-weight:700;cursor:pointer;white-space:nowrap;transition:background .2s;}
-.hero-search .search-btn:hover{background:var(--brass-light);}
+.hero-search select{background:none;border:none;color:var(--text-dim);padding:16px 16px;font-size:14px;outline:none;cursor:pointer;min-width:0;}
+.hero-search .search-btn{background:var(--cream);border:none;color:#1a1a16;padding:11px 22px;margin:6px;border-radius:11px;font-size:14px;font-weight:700;cursor:pointer;white-space:nowrap;transition:all .2s;font-family:'Archivo',sans-serif;}
+.hero-search .search-btn:hover{background:var(--cream-light);}
 /* Category chips */
-.cat-chip{display:inline-flex;align-items:center;gap:7px;padding:10px 18px;border-radius:50px;border:1px solid var(--border);background:var(--surface2);color:var(--text-dim);font-size:14px;cursor:pointer;transition:all .2s;white-space:nowrap;}
-.cat-chip:hover,.cat-chip.active{background:var(--brass-pale);border-color:var(--brass);color:var(--brass);}
+.cat-chip{display:inline-flex;align-items:center;gap:7px;padding:10px 18px;border-radius:50px;border:1px solid var(--border);background:var(--surface2);color:var(--text-dim);font-size:14px;font-weight:600;cursor:pointer;transition:all .2s;white-space:nowrap;}
+.cat-chip:hover,.cat-chip.active{background:var(--cream);border-color:var(--cream);color:#1a1a16;}
 /* Salon card cover */
-.salon-cover{width:100%;height:130px;border-radius:6px 6px 0 0;display:flex;align-items:center;justify-content:center;font-family:'Playfair Display',serif;font-size:48px;font-weight:900;letter-spacing:-.02em;overflow:hidden;position:relative;flex-shrink:0;}
+.salon-cover{width:100%;height:160px;display:flex;align-items:center;justify-content:center;font-family:'Archivo',sans-serif;font-size:52px;font-weight:900;letter-spacing:-.03em;overflow:hidden;position:relative;flex-shrink:0;}
 /* Dispo badge */
-.dispo-badge{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:20px;font-size:12px;font-weight:700;background:#3D7A5420;color:#7DC89A;border:1px solid #3D7A5440;}
-.dispo-badge::before{content:'';width:6px;height:6px;border-radius:50%;background:#7DC89A;display:inline-block;}
+.dispo-badge{display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;font-size:12px;font-weight:700;background:rgba(76,140,106,.18);color:#7FD0A4;border:1px solid rgba(76,140,106,.3);backdrop-filter:blur(8px);}
+.dispo-badge::before{content:'';width:6px;height:6px;border-radius:50%;background:#7FD0A4;display:inline-block;}
 /* Slot picker */
 .slot-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(72px,1fr));gap:8px;margin-top:10px;}
-.slot-btn{padding:8px 4px;border-radius:6px;border:1px solid var(--border);background:var(--surface2);color:var(--text-dim);font-size:14px;cursor:pointer;text-align:center;transition:all .15s;}
-.slot-btn:hover:not(:disabled){border-color:var(--brass);color:var(--brass);background:var(--brass-pale);}
-.slot-btn.selected{background:var(--brass);color:var(--bg);border-color:var(--brass);font-weight:700;}
-.slot-btn:disabled{opacity:.35;cursor:not-allowed;}
+.slot-btn{padding:10px 4px;border-radius:10px;border:1px solid var(--border);background:var(--surface2);color:var(--text-dim);font-size:14px;font-weight:600;cursor:pointer;text-align:center;transition:all .15s;}
+.slot-btn:hover:not(:disabled){border-color:var(--cream-dim);color:var(--text);background:var(--cream-pale);}
+.slot-btn.selected{background:var(--cream);color:#1a1a16;border-color:var(--cream);font-weight:700;}
+.slot-btn:disabled{opacity:.3;cursor:not-allowed;}
 /* Pro section */
-.pro-section{background:var(--surface);border-top:1px solid var(--border);padding:60px 24px;text-align:center;}
+.pro-section{background:var(--surface);border-top:1px solid var(--border);padding:64px 24px;text-align:center;}
 /* Stat cards */
-.stat-card{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:20px;text-align:center;flex:1;min-width:120px;}
+.stat-card{background:var(--surface2);border:1px solid var(--border);border-radius:16px;padding:22px;text-align:center;flex:1;min-width:120px;}
+.badge-sponsored{display:inline-block;background:var(--cream);color:#1a1a16;font-size:11px;font-weight:800;padding:4px 10px;border-radius:8px;letter-spacing:.02em;text-transform:uppercase;font-family:'Archivo',sans-serif;}
 `;
 
 // ============================================================
@@ -260,10 +266,9 @@ function Tabs({ tabs, active, onChange }) {
 // ============================================================
 function PoleHeader({ onAdmin }) {
   return (
-    <header style={{ background: 'var(--surface)', borderBottom: '1px solid var(--border)', padding: '0 20px', height: 54, display: 'flex', alignItems: 'center', gap: 14, position: 'sticky', top: 0, zIndex: 90 }}>
-      <div className="pole" style={{ height: 36 }} />
-      <span style={{ fontFamily: "'Playfair Display', serif", fontSize: 22, fontWeight: 900, color: 'var(--brass)', letterSpacing: '.04em' }}>BarberLink</span>
-      <span style={{ color: 'var(--text-muted)', fontSize: 13, marginLeft: 2 }}>La Réunion</span>
+    <header style={{ background: 'rgba(10,10,11,.85)', backdropFilter: 'blur(12px)', borderBottom: '1px solid var(--border)', padding: '0 18px', height: 58, display: 'flex', alignItems: 'center', gap: 12, position: 'sticky', top: 0, zIndex: 90 }}>
+      <div style={{ width: 34, height: 34, borderRadius: 10, background: 'var(--cream)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0 }}>✂</div>
+      <span style={{ fontFamily: "'Archivo', sans-serif", fontSize: 20, fontWeight: 800, color: 'var(--text)', letterSpacing: '-.02em' }}>BarberLink</span>
       <div style={{ flex: 1 }} />
       <button onClick={onAdmin} className="btn btn-o btn-sm" style={{ fontSize: 12 }}>Admin</button>
     </header>
@@ -298,8 +303,8 @@ function LandingScreen({ onClient, onSalon, onSearch }) {
           {[0,1,2].map(i => <div key={i} className="pole" style={{ height: 64, animationDelay: `${i * 0.3}s` }} />)}
         </div>
 
-        <h1 className="afu s1" style={{ fontSize: 'clamp(2.4rem,7vw,4rem)', fontWeight: 900, letterSpacing: '.02em', marginBottom: 10 }}>
-          Réservez votre barbier<br /><span style={{ color: 'var(--brass)' }}>en 3 clics</span>
+        <h1 className="afu s1" style={{ fontSize: 'clamp(2.6rem,8vw,4.4rem)', fontWeight: 900, letterSpacing: '-.03em', marginBottom: 14 }}>
+          Trouvez votre barbier<br />avec <span style={{ fontStyle: 'italic', fontWeight: 700, color: 'var(--cream)' }}>style</span>
         </h1>
         <p className="afu s2" style={{ color: 'var(--text-dim)', fontSize: 18, marginBottom: 36 }}>
           Simple · Immédiat · 24h/24 — La Réunion
@@ -627,11 +632,11 @@ function SalonDirectory({ client, onSelectSalon, onAccount, initialPresta, initi
 }
 
 const COVER_GRADIENTS = [
-  'linear-gradient(135deg,#2a1508,#4a2010)',
-  'linear-gradient(135deg,#0a1a10,#1a3a20)',
-  'linear-gradient(135deg,#0a0a1a,#1a1a3a)',
-  'linear-gradient(135deg,#1a0a10,#3a1020)',
-  'linear-gradient(135deg,#1a1000,#3a2800)',
+  'linear-gradient(135deg,#2b2b2e,#161618)',
+  'linear-gradient(135deg,#2e2a24,#17150f)',
+  'linear-gradient(135deg,#26282b,#141518)',
+  'linear-gradient(135deg,#2c2620,#18130d)',
+  'linear-gradient(135deg,#282a2c,#141416)',
 ];
 
 function SalonCard({ salon, note, onSelect, index, hasDispo }) {
@@ -645,12 +650,12 @@ function SalonCard({ salon, note, onSelect, index, hasDispo }) {
       style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 10, cursor: 'pointer', overflow: 'hidden' }}>
       {/* Cover */}
       <div className="salon-cover" style={{ background: grad }}>
-        <span style={{ color: 'rgba(184,134,11,0.25)', userSelect: 'none' }}>{initial}</span>
+        <span style={{ color: 'rgba(255,255,255,0.07)', userSelect: 'none' }}>{initial}</span>
         {salon.miseEnAvant && (
-          <span className="badge-sponsored" style={{ position: 'absolute', top: 10, left: 10 }}>Sponsorisé</span>
+          <span className="badge-sponsored" style={{ position: 'absolute', top: 12, left: 12 }}>Sponsorisé</span>
         )}
         {hasDispo && (
-          <span className="dispo-badge" style={{ position: 'absolute', top: 10, right: 10 }}>Disponible</span>
+          <span className="dispo-badge" style={{ position: 'absolute', top: 12, right: 12 }}>Disponible</span>
         )}
       </div>
       {/* Info */}
@@ -813,7 +818,7 @@ function QuickBook({ salon, preselectedBarbier, client, onConfirmed }) {
 // ============================================================
 function SalonDetail({ salon: initialSalon, client, onBack, onBook, onUpdateClient }) {
   const [salon, setSalon] = useState(initialSalon);
-  const [tab, setTab] = useState('barbiers');
+  const [tab, setTab] = useState('reserver');
   const [isFav, setIsFav] = useState((client?.favoris || []).includes(initialSalon.id));
 
   const avis = getAllByPrefix('avis:').filter(a => a.salonId === salon.id);
@@ -836,39 +841,50 @@ function SalonDetail({ salon: initialSalon, client, onBack, onBook, onUpdateClie
 
   const tabs = [{ id: 'reserver', label: '📅 Réserver' }, { id: 'barbiers', label: '✂ Barbiers & Tarifs' }, { id: 'portfolio', label: '📸 Réalisations' }, { id: 'avis', label: `⭐ Avis (${avis.length})` }];
 
+  const prixMin = Math.min(...(salon.barbiers || []).flatMap(b => Object.values(b.tarifs || {})).filter(v => v > 0));
+  const idx = Math.abs((salon.id || '').split('').reduce((a, c) => a + c.charCodeAt(0), 0)) % COVER_GRADIENTS.length;
+  const totalPresta = [...new Set((salon.barbiers || []).flatMap(b => Object.keys(b.tarifs || {}).filter(k => b.tarifs[k])))].length;
+
   return (
-    <div style={{ maxWidth: 760, margin: '0 auto', padding: '24px 16px' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, flexWrap: 'wrap', gap: 10 }}>
-        <button onClick={onBack} className="btn btn-o btn-sm">← Annuaire</button>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button onClick={toggleFav} className={`btn btn-sm ${isFav ? 'btn-r' : 'btn-o'}`}>{isFav ? '♥ Favori' : '♡ Ajouter'}</button>
-          <button className="btn btn-b btn-sm" onClick={() => onBook(salon, null)}>📅 Réserver</button>
-        </div>
+    <div style={{ maxWidth: 760, margin: '0 auto', paddingBottom: 90 }}>
+      {/* Image header */}
+      <div className="afu" style={{ position: 'relative', height: 280, background: COVER_GRADIENTS[idx], display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+        <span style={{ fontFamily: "'Archivo',sans-serif", fontSize: 110, fontWeight: 900, color: 'rgba(255,255,255,0.06)', letterSpacing: '-.04em', userSelect: 'none' }}>{(salon.nom || '?')[0].toUpperCase()}</span>
+        {/* Floating buttons */}
+        <button onClick={onBack} className="icon-sq" style={{ position: 'absolute', top: 16, left: 16 }}>←</button>
+        <button onClick={toggleFav} className="icon-sq" style={{ position: 'absolute', top: 16, right: 16, color: isFav ? '#E89090' : 'var(--text)' }}>{isFav ? '★' : '☆'}</button>
+        {salon.miseEnAvant && <span className="badge-sponsored" style={{ position: 'absolute', bottom: 16, left: 16 }}>Sponsorisé</span>}
+        <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(10,10,11,.9), transparent 50%)' }} />
       </div>
 
-      <div className="afu" style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 8, padding: 20, marginBottom: 20 }}>
-        <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start', flexWrap: 'wrap' }}>
-          <div style={{ flex: 1, minWidth: 200 }}>
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 8 }}>
-              <h2 style={{ fontSize: 24 }}>{salon.nom}</h2>
-              {salon.miseEnAvant && <span className="badge-sponsored">Sponsorisé</span>}
-            </div>
-            <p style={{ color: 'var(--text-dim)', marginBottom: 6 }}>📍 {salon.adresse}, {salon.ville}</p>
-            {salon.horaires && <p style={{ color: 'var(--text-dim)', fontSize: 14 }}>🕐 {salon.horaires}</p>}
-            {salon.telephone && <p style={{ color: 'var(--text-dim)', fontSize: 14 }}>📞 {salon.telephone}</p>}
-            {salon.infos && <p style={{ color: 'var(--text-muted)', fontSize: 13, marginTop: 6 }}>ℹ {salon.infos}</p>}
-          </div>
-          <div style={{ textAlign: 'center', minWidth: 80 }}>
-            {noteGlobale > 0 && <>
-              <div style={{ fontSize: 32, fontWeight: 900, color: 'var(--brass)', fontFamily: "'Playfair Display',serif" }}>{noteGlobale}</div>
-              <StarRow n={noteGlobale} size={14} />
-              <div style={{ color: 'var(--text-muted)', fontSize: 12, marginTop: 2 }}>{avis.length} avis</div>
-            </>}
-          </div>
+      {/* Info block */}
+      <div style={{ padding: '20px 18px 0' }}>
+        <div className="afu s1" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, marginBottom: 6 }}>
+          <h2 style={{ fontSize: 26, textTransform: 'uppercase', letterSpacing: '-.01em' }}>{salon.nom}</h2>
+          {noteGlobale > 0 && (
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: 'var(--cream)', fontWeight: 700, fontSize: 15, flexShrink: 0, marginTop: 4 }}>★ {noteGlobale} <span style={{ color: 'var(--text-muted)', fontWeight: 400, fontSize: 13 }}>({avis.length})</span></span>
+          )}
         </div>
+        <p className="afu s1" style={{ color: 'var(--text-dim)', fontSize: 15, marginBottom: 16 }}>{salon.adresse}, {salon.ville}</p>
+
+        {/* Info pills */}
+        <div className="afu s2" style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
+          <span className="info-pill">👤 {salon.barbiers?.length || 0} barbier{salon.barbiers?.length !== 1 ? 's' : ''}</span>
+          <span className="info-pill">✂ {totalPresta} prestations</span>
+          {salon.horaires && <span className="info-pill">🕐 {salon.horaires}</span>}
+          {salon.telephone && <span className="info-pill">📞 {salon.telephone}</span>}
+        </div>
+
+        {salon.infos && (
+          <p className="afu s2" style={{ color: 'var(--text-dim)', fontSize: 15, marginBottom: 16, lineHeight: 1.6 }}>{salon.infos}</p>
+        )}
       </div>
 
-      <Tabs tabs={tabs} active={tab} onChange={setTab} />
+      <div style={{ padding: '0 18px' }}>
+        <Tabs tabs={tabs} active={tab} onChange={setTab} />
+      </div>
+
+      <div style={{ padding: '0 18px' }}>
 
       {tab === 'reserver' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -950,6 +966,18 @@ function SalonDetail({ salon: initialSalon, client, onBack, onBook, onUpdateClie
           )}
         </div>
       )}
+      </div>
+
+      {/* Sticky price + CTA bar */}
+      <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 80, background: 'rgba(10,10,11,.92)', backdropFilter: 'blur(12px)', borderTop: '1px solid var(--border)', padding: '12px 18px', display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div style={{ maxWidth: 760, margin: '0 auto', width: '100%', display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 22, fontWeight: 800, fontFamily: "'Archivo',sans-serif", color: 'var(--text)' }}>{prixMin && isFinite(prixMin) ? `Dès ${prixMin} €` : 'Voir tarifs'}</div>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{salon.ville}</div>
+          </div>
+          <button className="btn btn-b" onClick={() => { setTab('reserver'); window.scrollTo({ top: 0, behavior: 'smooth' }); }}>Réserver un créneau</button>
+        </div>
+      </div>
     </div>
   );
 }
