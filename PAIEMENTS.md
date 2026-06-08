@@ -9,6 +9,32 @@ sa réservation, l'argent arrive sur **ton compte bancaire** via Stripe.
 
 ---
 
+## 🚀 Déploiement express (bouton 1-clic)
+
+Le bouton ci-dessous fait **tout** automatiquement : il copie le projet,
+configure Vercel, et te demande **uniquement** de coller ta clé Stripe.
+
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fazais976%2Fdesktop-tutorial&env=STRIPE_SECRET_KEY&envDescription=Votre%20cl%C3%A9%20secr%C3%A8te%20Stripe%20(commence%20par%20sk_)&envLink=https%3A%2F%2Fdashboard.stripe.com%2Fapikeys&project-name=barberlink-paiements&repository-name=barberlink-paiements)
+
+**Lien direct** (si le bouton ne s'affiche pas) :
+```
+https://vercel.com/new/clone?repository-url=https://github.com/azais976/desktop-tutorial&env=STRIPE_SECRET_KEY&envDescription=Cle%20secrete%20Stripe&envLink=https://dashboard.stripe.com/apikeys&project-name=barberlink-paiements&repository-name=barberlink-paiements
+```
+
+Les 3 clics :
+1. Connecte-toi avec **GitHub** (ça crée un petit dépôt `barberlink-paiements`).
+2. Quand Vercel demande **`STRIPE_SECRET_KEY`**, colle ta clé `sk_test_…`
+   (où la trouver : Stripe → Développeurs → Clés API).
+3. Clique **Deploy**. Tu obtiens une URL → ton endpoint est
+   `https://barberlink-paiements-xxx.vercel.app/api/checkout`.
+
+Puis va dans l'app → onglet **Paiements** → méthode **Automatique** → colle
+cette URL → **Enregistrer**. Terminé ✅
+
+> Le détail manuel complet reste décrit plus bas, au cas où.
+
+---
+
 ## Comment ça marche
 
 ```
