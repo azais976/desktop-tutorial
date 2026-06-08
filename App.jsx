@@ -160,7 +160,7 @@ function smsLink(tel, msg) {
   return `sms:${tel}?body=${encodeURIComponent(msg)}`;
 }
 function genCode(prefix) { return (prefix || '') + Math.random().toString(36).slice(2, 7).toUpperCase(); }
-// Promo helpers — a salon can flag one specific date in the month with a % discount
+// Promo helpers — a salon can flag one specific date with a discount (% or €)
 function getPromo(salon, dateStr) {
   const p = salon?.promo;
   if (p && p.date && p.date === dateStr && p.reduction > 0) return p;
@@ -168,7 +168,12 @@ function getPromo(salon, dateStr) {
 }
 function applyPromo(prix, promo) {
   if (!promo || !prix) return prix;
+  if (promo.type === 'eur') return Math.max(0, prix - promo.reduction);
   return Math.round(prix * (1 - promo.reduction / 100));
+}
+function promoLabel(promo) {
+  if (!promo) return '';
+  return promo.type === 'eur' ? `−${promo.reduction} €` : `−${promo.reduction} %`;
 }
 
 // ============================================================
@@ -597,13 +602,14 @@ function ClientRegistration({ onDone, onBack, subtitle }) {
 // ============================================================
 // SALON REGISTRATION
 // ============================================================
-function SalonRegistration({ onDone, onBack }) {
+function SalonRegistration({ onDone, onBack, reseau }) {
+  // `reseau` = { reseauId } when adding an extra salon under a Réseau plan
   const [step, setStep] = useState(0);
   const [form, setForm] = useState({
     nom: '', ville: '', adresse: '', telephone: '',
     horaires: { ...HORAIRES_DEFAULT },
     lienAvisGoogle: '', infos: '',
-    forfait: 'essentiel', nbBarbiers: 1,
+    forfait: reseau ? 'reseau' : 'essentiel', nbBarbiers: 1,
     barbiers: [{ nom: '', photo: '' }],
   });
   const [err, setErr] = useState('');
@@ -629,16 +635,23 @@ function SalonRegistration({ onDone, onBack }) {
     const lat = -20.5 + Math.random() * 1.5;
     const lng = 55.2 + Math.random() * 0.6;
     const salon = { ...form, id, lat, lng, miseEnAvant: false };
+    if (reseau) salon.reseauId = reseau.reseauId; // attach to the existing network
     sset(`salon:${id}`, salon);
     onDone(salon);
   }
 
-  const steps = [{ label: 'Infos salon' }, { label: 'Barbiers' }, { label: 'Forfait' }];
+  const steps = reseau
+    ? [{ label: 'Infos salon' }, { label: 'Barbiers' }]
+    : [{ label: 'Infos salon' }, { label: 'Barbiers' }, { label: 'Forfait' }];
+
+  // In réseau mode the Barbiers step is the last → submit directly from it
+  const barbiersIsLast = !!reseau;
 
   return (
     <div style={{ maxWidth: 580, margin: '0 auto', padding: 24 }}>
       <button onClick={onBack} className="btn btn-o btn-sm" style={{ marginBottom: 20 }}>← Retour</button>
-      <h2 style={{ marginBottom: 20 }}>Inscrire mon salon</h2>
+      <h2 style={{ marginBottom: 6 }}>{reseau ? 'Ajouter un salon au réseau' : 'Inscrire mon salon'}</h2>
+      {reseau && <p style={{ color: 'var(--text-dim)', fontSize: 14, marginBottom: 16 }}>Ce salon sera facturé <strong style={{ color: '#C9AEF0' }}>+{FORFAITS.reseau.extraParSalon} €/mois</strong> et hérite de toutes les fonctions Premium.</p>}
 
       <div style={{ display: 'flex', gap: 8, marginBottom: 28 }}>
         {steps.map((s, i) => (
@@ -717,7 +730,9 @@ function SalonRegistration({ onDone, onBack }) {
           <p style={{ color: 'var(--text-muted)', fontSize: 13, fontStyle: 'italic' }}>Les prestations et tarifs seront à renseigner depuis votre tableau de bord.</p>
           <div style={{ display: 'flex', gap: 10 }}>
             <button className="btn btn-o" onClick={() => setStep(0)}>← Retour</button>
-            <button className="btn btn-b" onClick={() => setStep(2)}>Suivant →</button>
+            {barbiersIsLast
+              ? <button className="btn btn-b" onClick={submit} style={{ flex: 1 }}>Ajouter ce salon</button>
+              : <button className="btn btn-b" onClick={() => setStep(2)}>Suivant →</button>}
           </div>
         </div>
       )}
@@ -944,7 +959,7 @@ function QuickBook({ salon, preselectedBarbier, client, onConfirmed }) {
 
   function confirm() {
     const id = 'rdv_' + uid();
-    const rdv = { id, salonId: salon.id, barbier, prestation, prix: prixFinal, prixBase: promo ? prixBase : undefined, promo: promo ? promo.reduction : undefined, date: selectedDate, heure, clientId: client?.id || 'anon', clientNom: client?.nom || 'Client', clientTel: client?.telephone || '', statut: 'en attente', createdAt: new Date().toISOString() };
+    const rdv = { id, salonId: salon.id, barbier, prestation, prix: prixFinal, prixBase: promo ? prixBase : undefined, promo: promo ? promoLabel(promo) : undefined, date: selectedDate, heure, clientId: client?.id || 'anon', clientNom: client?.nom || 'Client', clientTel: client?.telephone || '', statut: 'en attente', createdAt: new Date().toISOString() };
     sset(`rdv:${id}`, rdv);
     if (client) {
       const upd = { ...client, historique: [...(client.historique || []), id] };
@@ -959,7 +974,7 @@ function QuickBook({ salon, preselectedBarbier, client, onConfirmed }) {
       <div style={{ fontSize: 36, marginBottom: 10 }}>✓</div>
       <h3 style={{ color: '#7DC89A', marginBottom: 8 }}>RDV confirmé !</h3>
       <p style={{ color: 'var(--text-dim)' }}>{confirmed.prestation} avec <strong>{confirmed.barbier}</strong></p>
-      <p style={{ color: 'var(--text-dim)' }}>{fmtDate(confirmed.date)} à {confirmed.heure} · {confirmed.prix} €{confirmed.promo ? ` (−${confirmed.promo} %)` : ''}</p>
+      <p style={{ color: 'var(--text-dim)' }}>{fmtDate(confirmed.date)} à {confirmed.heure} · {confirmed.prix} €{confirmed.promo ? ` (${confirmed.promo})` : ''}</p>
     </div>
   );
 
@@ -1010,7 +1025,7 @@ function QuickBook({ salon, preselectedBarbier, client, onConfirmed }) {
                   style={{ position: 'relative', flexShrink: 0, padding: '8px 14px', borderRadius: 8, border: `1px solid ${dateIdx === i ? 'var(--brass)' : dayPromo ? '#9C7BD0' : 'var(--border)'}`, background: dateIdx === i ? 'var(--brass-pale)' : 'var(--surface2)', color: dateIdx === i ? 'var(--brass)' : 'var(--text-dim)', cursor: 'pointer', textAlign: 'center', minWidth: 58 }}>
                   <div style={{ fontSize: 11, marginBottom: 2 }}>{dayNames[dd.getDay()]}</div>
                   <div style={{ fontWeight: 700, fontSize: 16 }}>{dd.getDate()}</div>
-                  {dayPromo && <span style={{ position: 'absolute', top: -7, right: -7, background: '#9C7BD0', color: '#fff', fontSize: 10, fontWeight: 700, padding: '1px 5px', borderRadius: 8 }}>−{dayPromo.reduction}%</span>}
+                  {dayPromo && <span style={{ position: 'absolute', top: -7, right: -7, background: '#9C7BD0', color: '#fff', fontSize: 10, fontWeight: 700, padding: '1px 5px', borderRadius: 8 }}>{promoLabel(dayPromo).replace(' ', '')}</span>}
                 </button>
               );
             })}
@@ -1033,7 +1048,7 @@ function QuickBook({ salon, preselectedBarbier, client, onConfirmed }) {
 
         {promo && (
           <div style={{ background: 'rgba(156,123,208,.12)', border: '1px solid rgba(156,123,208,.4)', borderRadius: 8, padding: '10px 12px', marginBottom: 12, fontSize: 14, color: '#C9AEF0', display: 'flex', alignItems: 'center', gap: 8 }}>
-            <Icon name="bolt" size={15} /> Offre du jour : <strong>−{promo.reduction}%</strong> sur cette date !
+            <Icon name="bolt" size={15} /> Offre du jour : <strong>{promoLabel(promo)}</strong> sur cette date !
           </div>
         )}
 
@@ -1121,7 +1136,7 @@ function SalonDetail({ salon: initialSalon, client, onBack, onBook, onUpdateClie
         {salon.promo?.date >= today() && (
           <div className="afu s2" style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'rgba(156,123,208,.12)', border: '1px solid rgba(156,123,208,.4)', borderRadius: 10, padding: '12px 14px', marginBottom: 16 }}>
             <Icon name="bolt" size={18} style={{ color: '#C9AEF0' }} />
-            <span style={{ fontSize: 14, color: '#C9AEF0' }}>Offre spéciale : <strong>−{salon.promo.reduction}%</strong> le {fmtDate(salon.promo.date)}</span>
+            <span style={{ fontSize: 14, color: '#C9AEF0' }}>Offre spéciale : <strong>{promoLabel(salon.promo)}</strong> le {fmtDate(salon.promo.date)}</span>
           </div>
         )}
       </div>
@@ -1309,7 +1324,7 @@ puis confirme au client.`;
               const base = barb.tarifs[data.prestation];
               const promo = getPromo(salonData, data.date);
               rdv.prix = applyPromo(base, promo);
-              if (promo) { rdv.prixBase = base; rdv.promo = promo.reduction; }
+              if (promo) { rdv.prixBase = base; rdv.promo = promoLabel(promo); }
             }
           }
           sset(`rdv:${rdvId}`, rdv);
@@ -1357,7 +1372,7 @@ puis confirme au client.`;
           <h4 style={{ color: '#7DC89A', marginBottom: 6 }}>✓ Rendez-vous confirmé !</h4>
           <p style={{ fontSize: 14, color: 'var(--text-dim)' }}>
             {rdvConfirmed.prestation} avec {rdvConfirmed.barbier} · {fmtDate(rdvConfirmed.date)} à {rdvConfirmed.heure}
-            {rdvConfirmed.prix ? ` · ${rdvConfirmed.prix} €` : ''}{rdvConfirmed.promo ? ` (−${rdvConfirmed.promo}%)` : ''}
+            {rdvConfirmed.prix ? ` · ${rdvConfirmed.prix} €` : ''}{rdvConfirmed.promo ? ` (${rdvConfirmed.promo})` : ''}
           </p>
         </div>
       )}
@@ -1513,7 +1528,7 @@ function ClientAccount({ client, onUpdateClient, onBack, onRebook }) {
               <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
                 <div>
                   <p style={{ fontWeight: 700, color: 'var(--cream)' }}>{r.prestation} <span style={{ color: 'var(--text-dim)', fontWeight: 400 }}>avec {r.barbier}</span></p>
-                  <p style={{ color: 'var(--text-dim)', fontSize: 14 }}>{fmtDate(r.date)} à {r.heure}{r.prix ? ` · ${r.prix} €` : ''}{r.promo ? <span style={{ color: '#C9AEF0' }}> (−{r.promo}%)</span> : ''}</p>
+                  <p style={{ color: 'var(--text-dim)', fontSize: 14 }}>{fmtDate(r.date)} à {r.heure}{r.prix ? ` · ${r.prix} €` : ''}{r.promo ? <span style={{ color: '#C9AEF0' }}> ({r.promo})</span> : ''}</p>
                   <p style={{ color: 'var(--text-muted)', fontSize: 13 }}>{sObj?.nom}</p>
                 </div>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start', flexWrap: 'wrap' }}>
@@ -1622,15 +1637,50 @@ function StatutBadge({ statut }) {
 function SalonDashboard({ salon: initialSalon, onLogout }) {
   const [salon, setSalon] = useState(initialSalon);
   const [tab, setTab] = useState('rdv');
+  const [addingSalon, setAddingSalon] = useState(false);
+  const [reseauSalons, setReseauSalons] = useState([]);
+
+  const forfait = salon.forfait || 'essentiel';
+  const isReseau = forfait === 'reseau';
+  const reseauId = salon.reseauId || salon.id;
+
+  // Ensure a Réseau anchor salon has a reseauId, then load all salons of the network
+  useEffect(() => {
+    if (isReseau && !salon.reseauId) {
+      const upd = { ...salon, reseauId: salon.id };
+      sset(`salon:${salon.id}`, upd);
+      setSalon(upd);
+    }
+  }, []);
+
+  function loadReseau() {
+    if (!isReseau) { setReseauSalons([salon]); return; }
+    const all = getAllByPrefix('salon:').filter(s => (s.reseauId || s.id) === reseauId);
+    setReseauSalons(all.length ? all : [salon]);
+  }
+  useEffect(() => { loadReseau(); }, [salon, isReseau]);
 
   function refresh() {
     const fresh = sget(`salon:${salon.id}`);
     if (fresh) setSalon(fresh);
+    loadReseau();
   }
 
-  const forfait = salon.forfait || 'essentiel';
+  function switchSalon(s) { setSalon(s); setTab('rdv'); }
+
+  function onSalonAdded(newSalon) {
+    setAddingSalon(false);
+    setSalon(newSalon);
+    setTab('rdv');
+    loadReseau();
+  }
+
   const canCroissance = ['croissance', 'premium', 'reseau'].includes(forfait);
   const canPremium = ['premium', 'reseau'].includes(forfait);
+
+  if (addingSalon) {
+    return <SalonRegistration reseau={{ reseauId }} onBack={() => setAddingSalon(false)} onDone={onSalonAdded} />;
+  }
 
   const lockIcon = <Icon name="lock" size={12} style={{ marginLeft: 5, opacity: .7 }} />;
   const allTabs = [
@@ -1659,6 +1709,31 @@ function SalonDashboard({ salon: initialSalon, onLogout }) {
           <button className="btn btn-o btn-sm" onClick={onLogout}>Déconnexion</button>
         </div>
       </div>
+
+      {/* Réseau : sélecteur de salons + ajout */}
+      {isReseau && (
+        <div style={{ background: 'rgba(156,123,208,.08)', border: '1px solid rgba(156,123,208,.3)', borderRadius: 12, padding: 14, marginBottom: 20 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, flexWrap: 'wrap', gap: 8 }}>
+            <span style={{ fontSize: 13, color: '#C9AEF0', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
+              <Icon name="store" size={15} /> Mon réseau — {reseauSalons.length} salon{reseauSalons.length > 1 ? 's' : ''}
+            </span>
+            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+              {FORFAITS.reseau.prix} € {reseauSalons.length > 1 ? `+ ${(reseauSalons.length - 1)} × ${FORFAITS.reseau.extraParSalon} € = ${FORFAITS.reseau.prix + (reseauSalons.length - 1) * FORFAITS.reseau.extraParSalon} €/mois` : '/mois'}
+            </span>
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {reseauSalons.map(s => (
+              <button key={s.id} onClick={() => switchSalon(s)}
+                className={`cat-chip${s.id === salon.id ? ' active' : ''}`} style={{ padding: '8px 14px' }}>
+                {s.nom}
+              </button>
+            ))}
+            <button onClick={() => setAddingSalon(true)} className="cat-chip" style={{ padding: '8px 14px', borderStyle: 'dashed', color: '#C9AEF0' }}>
+              <Icon name="plus" size={14} /> Ajouter un salon (+{FORFAITS.reseau.extraParSalon} €)
+            </button>
+          </div>
+        </div>
+      )}
 
       <Tabs tabs={allTabs} active={tab} onChange={setTab} />
 
@@ -1880,6 +1955,7 @@ function ParamsTab({ salon, onUpdate }) {
     horaires: salon.horaires && typeof salon.horaires === 'object' ? salon.horaires : { ...HORAIRES_DEFAULT },
     promoActive: !!salon.promo,
     promoDate: salon.promo?.date || '',
+    promoType: salon.promo?.type || 'pct',
     promoReduction: salon.promo?.reduction || 15,
   });
   const [saved, setSaved] = useState(false);
@@ -1888,8 +1964,8 @@ function ParamsTab({ salon, onUpdate }) {
   const updHoraire = (j, k, v) => setForm(f => ({ ...f, horaires: { ...f.horaires, [j]: { ...f.horaires[j], [k]: v } } }));
 
   function save() {
-    const { promoActive, promoDate, promoReduction, ...rest } = form;
-    const promo = (promoActive && promoDate && promoReduction > 0) ? { date: promoDate, reduction: Number(promoReduction) } : null;
+    const { promoActive, promoDate, promoType, promoReduction, ...rest } = form;
+    const promo = (promoActive && promoDate && promoReduction > 0) ? { date: promoDate, type: promoType, reduction: Number(promoReduction) } : null;
     onUpdate({ ...salon, ...rest, promo });
     setSaved(true);
     setTimeout(() => setSaved(false), 2500);
@@ -1946,16 +2022,23 @@ function ParamsTab({ salon, onUpdate }) {
           {form.promoActive && (
             <>
               <p style={{ color: 'var(--text-dim)', fontSize: 13, marginBottom: 12 }}>Choisissez un jour creux du mois et appliquez une réduction pour le remplir. La promo s'affiche aux clients lors de la réservation.</p>
-              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-                <div style={{ flex: '1 1 160px' }}>
+              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                <div style={{ flex: '1 1 150px' }}>
                   <label style={{ fontSize: 12, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Date de l'offre</label>
                   <input type="date" className="fi" value={form.promoDate} min={today()} onChange={e => upd('promoDate', e.target.value)} />
                 </div>
                 <div style={{ flex: '0 0 120px' }}>
+                  <label style={{ fontSize: 12, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Type</label>
+                  <select className="fi" value={form.promoType} onChange={e => upd('promoType', e.target.value)}>
+                    <option value="pct">Pourcentage</option>
+                    <option value="eur">Montant en €</option>
+                  </select>
+                </div>
+                <div style={{ flex: '0 0 110px' }}>
                   <label style={{ fontSize: 12, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Réduction</label>
                   <div style={{ position: 'relative' }}>
-                    <input type="number" className="fi" min={5} max={70} value={form.promoReduction} onChange={e => upd('promoReduction', e.target.value)} style={{ paddingRight: 28 }} />
-                    <span style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', fontSize: 13 }}>%</span>
+                    <input type="number" className="fi" min={1} max={form.promoType === 'eur' ? 200 : 70} value={form.promoReduction} onChange={e => upd('promoReduction', e.target.value)} style={{ paddingRight: 28 }} />
+                    <span style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', fontSize: 13 }}>{form.promoType === 'eur' ? '€' : '%'}</span>
                   </div>
                 </div>
               </div>
