@@ -482,47 +482,6 @@ function smsLink(tel, msg) {
   return `sms:${tel}?body=${encodeURIComponent(msg)}`;
 }
 function genCode(prefix) { return (prefix || '') + Math.random().toString(36).slice(2, 7).toUpperCase(); }
-function pad2(n) { return String(n).padStart(2, '0'); }
-// Build the start/end of a 45-min appointment in local "YYYYMMDDTHHMMSS" format
-function rdvTimes(rdv) {
-  const [y, m, d] = rdv.date.split('-').map(Number);
-  const [hh, mm] = rdv.heure.split(':').map(Number);
-  const start = `${y}${pad2(m)}${pad2(d)}T${pad2(hh)}${pad2(mm)}00`;
-  const e = new Date(y, m - 1, d, hh, mm + 45);
-  const end = `${e.getFullYear()}${pad2(e.getMonth() + 1)}${pad2(e.getDate())}T${pad2(e.getHours())}${pad2(e.getMinutes())}00`;
-  return { start, end };
-}
-// Google Calendar "add event" link
-function gcalLink(rdv, salon) {
-  const { start, end } = rdvTimes(rdv);
-  const text = encodeURIComponent(`${rdv.prestation} — ${salon?.nom || 'Barbier'}`);
-  const details = encodeURIComponent(`Rendez-vous ${rdv.prestation} avec ${rdv.barbier}${rdv.prix ? ` · ${rdv.prix} €` : ''}`);
-  const loc = encodeURIComponent(salon ? `${salon.adresse || ''}, ${salon.ville || ''}` : '');
-  return `https://www.google.com/calendar/render?action=TEMPLATE&text=${text}&dates=${start}/${end}&details=${details}&location=${loc}`;
-}
-// Download an .ics file (Apple Calendar, Outlook…)
-function downloadICS(rdv, salon) {
-  const { start, end } = rdvTimes(rdv);
-  const now = new Date();
-  const stamp = `${now.getUTCFullYear()}${pad2(now.getUTCMonth() + 1)}${pad2(now.getUTCDate())}T${pad2(now.getUTCHours())}${pad2(now.getUTCMinutes())}${pad2(now.getUTCSeconds())}Z`;
-  const loc = salon ? `${salon.nom}, ${salon.adresse || ''}, ${salon.ville || ''}` : '';
-  const ics = [
-    'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//BarberLink//FR', 'CALSCALE:GREGORIAN',
-    'BEGIN:VEVENT', `UID:${rdv.id}@barberlink`, `DTSTAMP:${stamp}`,
-    `DTSTART:${start}`, `DTEND:${end}`,
-    `SUMMARY:${rdv.prestation} — ${salon ? salon.nom : 'Barbier'}`,
-    `DESCRIPTION:Rendez-vous ${rdv.prestation} avec ${rdv.barbier}${rdv.prix ? ' - ' + rdv.prix + ' EUR' : ''}`,
-    `LOCATION:${loc}`,
-    'BEGIN:VALARM', 'TRIGGER:-PT2H', 'ACTION:DISPLAY', 'DESCRIPTION:Rappel RDV barbier', 'END:VALARM',
-    'END:VEVENT', 'END:VCALENDAR',
-  ].join('\r\n');
-  const blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url; a.download = `rdv-${rdv.date}.ics`;
-  document.body.appendChild(a); a.click(); document.body.removeChild(a);
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
 // Promo helpers — a salon can flag one specific date in the month with a % discount
 function getPromo(salon, dateStr) {
   const p = salon?.promo;
@@ -662,7 +621,10 @@ function LockBadge({ plan }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', background: 'rgba(0,0,0,0.4)', borderRadius: 6, border: '1px solid var(--border)' }}>
       <Icon name="lock" size={19} style={{ color: 'var(--cream-dim)' }} />
-      <span style={{ color: 'var(--text-dim)', fontSize: 14 }}>Disponible en formule <strong style={{ color: 'var(--brass)' }}>{plan}</strong> ou supérieure</span>
+      <span style={{ color: 'var(--text-dim)', fontSize: 14 }}>
+        Disponible en formule <strong style={{ color: 'var(--brass)' }}>{plan}</strong>
+        {plan === 'Premium' ? ', Réseau' : plan === 'Croissance' ? ', Premium ou Réseau' : ''} ou supérieure
+      </span>
     </div>
   );
 }
@@ -1265,31 +1227,7 @@ function SalonCard({ salon, note, onSelect, index, hasDispo }) {
   );
 }
 
-// Reusable "add to calendar" control (Google Agenda + .ics download)
-function AddToCalendar({ rdv, salon, compact }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <div style={{ position: 'relative', display: 'inline-block' }}>
-      <button className={`btn btn-o ${compact ? 'btn-sm' : ''}`} onClick={() => setOpen(o => !o)}>
-        <Icon name="calendar" size={compact ? 13 : 15} /> Ajouter à mon agenda
-      </button>
-      {open && (
-        <div style={{ position: 'absolute', zIndex: 20, top: '110%', left: 0, background: 'var(--card2)', border: '1px solid var(--border)', borderRadius: 10, padding: 6, minWidth: 190, boxShadow: '0 12px 40px rgba(0,0,0,.5)' }}>
-          <a href={gcalLink(rdv, salon)} target="_blank" rel="noopener noreferrer" onClick={() => setOpen(false)}
-            style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 11px', borderRadius: 7, color: 'var(--text)', fontSize: 14, textDecoration: 'none' }}
-            onMouseEnter={e => e.currentTarget.style.background = 'var(--surface2)'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-            <Icon name="calendar" size={15} /> Google Agenda
-          </a>
-          <button onClick={() => { downloadICS(rdv, salon); setOpen(false); }}
-            style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 11px', borderRadius: 7, color: 'var(--text)', fontSize: 14, background: 'none', border: 'none', width: '100%', textAlign: 'left' }}
-            onMouseEnter={e => e.currentTarget.style.background = 'var(--surface2)'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-            <Icon name="clock" size={15} /> Apple / Outlook (.ics)
-          </button>
-        </div>
-      )}
-    </div>
-  );
-}
+
 
 // ============================================================
 // QUICK BOOK (slot picker visuel — inspiré Planity)
@@ -1343,8 +1281,7 @@ function QuickBook({ salon, preselectedBarbier, client, onConfirmed }) {
       <div style={{ fontSize: 36, marginBottom: 10 }}>✓</div>
       <h3 style={{ color: '#7DC89A', marginBottom: 8 }}>RDV confirmé !</h3>
       <p style={{ color: 'var(--text-dim)' }}>{confirmed.prestation} avec <strong>{confirmed.barbier}</strong></p>
-      <p style={{ color: 'var(--text-dim)', marginBottom: 14 }}>{fmtDate(confirmed.date)} à {confirmed.heure} · {confirmed.prix} €{confirmed.promo ? ` (−${confirmed.promo} %)` : ''}</p>
-      <AddToCalendar rdv={confirmed} salon={salon} compact />
+      <p style={{ color: 'var(--text-dim)' }}>{fmtDate(confirmed.date)} à {confirmed.heure} · {confirmed.prix} €{confirmed.promo ? ` (−${confirmed.promo} %)` : ''}</p>
     </div>
   );
 
@@ -1740,11 +1677,10 @@ puis confirme au client.`;
       {rdvConfirmed && (
         <div className="afu" style={{ background: '#3D7A5420', border: '1px solid var(--success)', borderRadius: 8, padding: 16, marginBottom: 14 }}>
           <h4 style={{ color: '#7DC89A', marginBottom: 6 }}>✓ Rendez-vous confirmé !</h4>
-          <p style={{ fontSize: 14, color: 'var(--text-dim)', marginBottom: 12 }}>
+          <p style={{ fontSize: 14, color: 'var(--text-dim)' }}>
             {rdvConfirmed.prestation} avec {rdvConfirmed.barbier} · {fmtDate(rdvConfirmed.date)} à {rdvConfirmed.heure}
             {rdvConfirmed.prix ? ` · ${rdvConfirmed.prix} €` : ''}{rdvConfirmed.promo ? ` (−${rdvConfirmed.promo}%)` : ''}
           </p>
-          <AddToCalendar rdv={rdvConfirmed} salon={sget(`salon:${rdvConfirmed.salonId}`)} compact />
         </div>
       )}
 
@@ -1879,9 +1815,8 @@ function ClientAccount({ client, onUpdateClient, onBack, onRebook }) {
           {upcomingReminders.map(r => {
             const s = getAllByPrefix('salon:').find(x => x.id === r.salonId);
             return (
-              <div key={r.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginTop: 4 }}>
+              <div key={r.id} style={{ marginTop: 4 }}>
                 <span style={{ fontSize: 14 }}><strong style={{ color: 'var(--cream)' }}>{r.prestation}</strong> avec {r.barbier} · {fmtDate(r.date)} à {r.heure}{s ? ` · ${s.nom}` : ''}</span>
-                <AddToCalendar rdv={r} salon={s} compact />
               </div>
             );
           })}
@@ -1905,7 +1840,6 @@ function ClientAccount({ client, onUpdateClient, onBack, onRebook }) {
                 </div>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start', flexWrap: 'wrap' }}>
                   <StatutBadge statut={r.statut} />
-                  {r.date >= today() && r.statut !== 'annulé' && <AddToCalendar rdv={r} salon={sObj} compact />}
                   <button className="btn btn-o btn-sm" onClick={() => onRebook(r)}>↻ Re-réserver</button>
                   {r.date >= today() && r.statut !== 'annulé' && (
                     <button className="btn btn-r btn-sm" onClick={() => {
