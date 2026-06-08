@@ -481,6 +481,58 @@ function phoneLink(tel, msg) {
 function smsLink(tel, msg) {
   return `sms:${tel}?body=${encodeURIComponent(msg)}`;
 }
+function genCode(prefix) { return (prefix || '') + Math.random().toString(36).slice(2, 7).toUpperCase(); }
+function pad2(n) { return String(n).padStart(2, '0'); }
+// Build the start/end of a 45-min appointment in local "YYYYMMDDTHHMMSS" format
+function rdvTimes(rdv) {
+  const [y, m, d] = rdv.date.split('-').map(Number);
+  const [hh, mm] = rdv.heure.split(':').map(Number);
+  const start = `${y}${pad2(m)}${pad2(d)}T${pad2(hh)}${pad2(mm)}00`;
+  const e = new Date(y, m - 1, d, hh, mm + 45);
+  const end = `${e.getFullYear()}${pad2(e.getMonth() + 1)}${pad2(e.getDate())}T${pad2(e.getHours())}${pad2(e.getMinutes())}00`;
+  return { start, end };
+}
+// Google Calendar "add event" link
+function gcalLink(rdv, salon) {
+  const { start, end } = rdvTimes(rdv);
+  const text = encodeURIComponent(`${rdv.prestation} — ${salon?.nom || 'Barbier'}`);
+  const details = encodeURIComponent(`Rendez-vous ${rdv.prestation} avec ${rdv.barbier}${rdv.prix ? ` · ${rdv.prix} €` : ''}`);
+  const loc = encodeURIComponent(salon ? `${salon.adresse || ''}, ${salon.ville || ''}` : '');
+  return `https://www.google.com/calendar/render?action=TEMPLATE&text=${text}&dates=${start}/${end}&details=${details}&location=${loc}`;
+}
+// Download an .ics file (Apple Calendar, Outlook…)
+function downloadICS(rdv, salon) {
+  const { start, end } = rdvTimes(rdv);
+  const now = new Date();
+  const stamp = `${now.getUTCFullYear()}${pad2(now.getUTCMonth() + 1)}${pad2(now.getUTCDate())}T${pad2(now.getUTCHours())}${pad2(now.getUTCMinutes())}${pad2(now.getUTCSeconds())}Z`;
+  const loc = salon ? `${salon.nom}, ${salon.adresse || ''}, ${salon.ville || ''}` : '';
+  const ics = [
+    'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//BarberLink//FR', 'CALSCALE:GREGORIAN',
+    'BEGIN:VEVENT', `UID:${rdv.id}@barberlink`, `DTSTAMP:${stamp}`,
+    `DTSTART:${start}`, `DTEND:${end}`,
+    `SUMMARY:${rdv.prestation} — ${salon ? salon.nom : 'Barbier'}`,
+    `DESCRIPTION:Rendez-vous ${rdv.prestation} avec ${rdv.barbier}${rdv.prix ? ' - ' + rdv.prix + ' EUR' : ''}`,
+    `LOCATION:${loc}`,
+    'BEGIN:VALARM', 'TRIGGER:-PT2H', 'ACTION:DISPLAY', 'DESCRIPTION:Rappel RDV barbier', 'END:VALARM',
+    'END:VEVENT', 'END:VCALENDAR',
+  ].join('\r\n');
+  const blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `rdv-${rdv.date}.ics`;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+// Promo helpers — a salon can flag one specific date in the month with a % discount
+function getPromo(salon, dateStr) {
+  const p = salon?.promo;
+  if (p && p.date && p.date === dateStr && p.reduction > 0) return p;
+  return null;
+}
+function applyPromo(prix, promo) {
+  if (!promo || !prix) return prix;
+  return Math.round(prix * (1 - promo.reduction / 100));
+}
 
 // ============================================================
 // ICONS (elegant thin line — no emoji)
@@ -860,12 +912,27 @@ function LandingScreen({ onClient, onSalon, onSearch }) {
 function ClientRegistration({ onDone, onBack, subtitle }) {
   const [nom, setNom] = useState('');
   const [tel, setTel] = useState('');
+  const [codeParrain, setCodeParrain] = useState('');
   const [err, setErr] = useState('');
 
   function submit() {
     if (!nom.trim() || !tel.trim()) { setErr('Veuillez remplir tous les champs.'); return; }
     const id = 'c_' + uid();
-    const client = { id, nom: nom.trim(), telephone: tel.trim(), favoris: [], historique: [] };
+    let parrainePar = null;
+    // Validate referral code if provided
+    if (codeParrain.trim()) {
+      const code = codeParrain.trim().toUpperCase();
+      const parrain = getAllByPrefix('client:').find(c => c.codeParrainage === code);
+      if (!parrain) { setErr('Code de parrainage introuvable.'); return; }
+      parrainePar = parrain.id;
+      // Reward both: +1 filleul for parrain, +1 récompense each
+      const parrainUpd = { ...parrain, filleuls: [...(parrain.filleuls || []), id], recompenses: (parrain.recompenses || 0) + 1 };
+      sset(`client:${parrain.id}`, parrainUpd);
+      // Notify the parrain
+      const nid = 'notif_' + uid();
+      sset(`notif:${nid}`, { id: nid, clientId: parrain.id, type: 'parrainage', message: `${nom.trim()} a rejoint BarberLink grâce à vous ! Vous gagnez une réduction.`, lu: false, createdAt: new Date().toISOString() });
+    }
+    const client = { id, nom: nom.trim(), telephone: tel.trim(), favoris: [], historique: [], codeParrainage: genCode('BL'), filleuls: [], recompenses: parrainePar ? 1 : 0, parrainePar };
     sset(`client:${id}`, client);
     onDone(client);
   }
@@ -879,6 +946,7 @@ function ClientRegistration({ onDone, onBack, subtitle }) {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
         <input className="fi" placeholder="Votre prénom et nom" value={nom} onChange={e => setNom(e.target.value)} />
         <input className="fi" placeholder="Numéro de téléphone" value={tel} onChange={e => setTel(e.target.value)} type="tel" />
+        <input className="fi" placeholder="Code de parrainage (optionnel)" value={codeParrain} onChange={e => setCodeParrain(e.target.value.toUpperCase())} style={{ textTransform: 'uppercase' }} />
         {err && <p style={{ color: '#E06060', fontSize: 14 }}>{err}</p>}
         <button className="btn btn-b" onClick={submit} style={{ marginTop: 6 }}>Accéder à l'annuaire →</button>
       </div>
@@ -1197,6 +1265,32 @@ function SalonCard({ salon, note, onSelect, index, hasDispo }) {
   );
 }
 
+// Reusable "add to calendar" control (Google Agenda + .ics download)
+function AddToCalendar({ rdv, salon, compact }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div style={{ position: 'relative', display: 'inline-block' }}>
+      <button className={`btn btn-o ${compact ? 'btn-sm' : ''}`} onClick={() => setOpen(o => !o)}>
+        <Icon name="calendar" size={compact ? 13 : 15} /> Ajouter à mon agenda
+      </button>
+      {open && (
+        <div style={{ position: 'absolute', zIndex: 20, top: '110%', left: 0, background: 'var(--card2)', border: '1px solid var(--border)', borderRadius: 10, padding: 6, minWidth: 190, boxShadow: '0 12px 40px rgba(0,0,0,.5)' }}>
+          <a href={gcalLink(rdv, salon)} target="_blank" rel="noopener noreferrer" onClick={() => setOpen(false)}
+            style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 11px', borderRadius: 7, color: 'var(--text)', fontSize: 14, textDecoration: 'none' }}
+            onMouseEnter={e => e.currentTarget.style.background = 'var(--surface2)'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+            <Icon name="calendar" size={15} /> Google Agenda
+          </a>
+          <button onClick={() => { downloadICS(rdv, salon); setOpen(false); }}
+            style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 11px', borderRadius: 7, color: 'var(--text)', fontSize: 14, background: 'none', border: 'none', width: '100%', textAlign: 'left' }}
+            onMouseEnter={e => e.currentTarget.style.background = 'var(--surface2)'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+            <Icon name="clock" size={15} /> Apple / Outlook (.ics)
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ============================================================
 // QUICK BOOK (slot picker visuel — inspiré Planity)
 // ============================================================
@@ -1228,10 +1322,13 @@ function QuickBook({ salon, preselectedBarbier, client, onConfirmed }) {
     return slotDate > new Date();
   });
 
+  const promo = getPromo(salon, selectedDate);
+  const prixBase = barbierObj?.tarifs?.[prestation] || 0;
+  const prixFinal = applyPromo(prixBase, promo);
+
   function confirm() {
     const id = 'rdv_' + uid();
-    const prix = barbierObj?.tarifs?.[prestation] || 0;
-    const rdv = { id, salonId: salon.id, barbier, prestation, prix, date: selectedDate, heure, clientId: client?.id || 'anon', clientNom: client?.nom || 'Client', clientTel: client?.telephone || '', statut: 'en attente', createdAt: new Date().toISOString() };
+    const rdv = { id, salonId: salon.id, barbier, prestation, prix: prixFinal, prixBase: promo ? prixBase : undefined, promo: promo ? promo.reduction : undefined, date: selectedDate, heure, clientId: client?.id || 'anon', clientNom: client?.nom || 'Client', clientTel: client?.telephone || '', statut: 'en attente', createdAt: new Date().toISOString() };
     sset(`rdv:${id}`, rdv);
     if (client) {
       const upd = { ...client, historique: [...(client.historique || []), id] };
@@ -1246,7 +1343,8 @@ function QuickBook({ salon, preselectedBarbier, client, onConfirmed }) {
       <div style={{ fontSize: 36, marginBottom: 10 }}>✓</div>
       <h3 style={{ color: '#7DC89A', marginBottom: 8 }}>RDV confirmé !</h3>
       <p style={{ color: 'var(--text-dim)' }}>{confirmed.prestation} avec <strong>{confirmed.barbier}</strong></p>
-      <p style={{ color: 'var(--text-dim)' }}>{fmtDate(confirmed.date)} à {confirmed.heure} · {confirmed.prix} €</p>
+      <p style={{ color: 'var(--text-dim)', marginBottom: 14 }}>{fmtDate(confirmed.date)} à {confirmed.heure} · {confirmed.prix} €{confirmed.promo ? ` (−${confirmed.promo} %)` : ''}</p>
+      <AddToCalendar rdv={confirmed} salon={salon} compact />
     </div>
   );
 
@@ -1291,11 +1389,13 @@ function QuickBook({ salon, preselectedBarbier, client, onConfirmed }) {
           <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 4 }}>
             {days.map((d, i) => {
               const dd = new Date(d);
+              const dayPromo = getPromo(salon, d);
               return (
                 <button key={d} onClick={() => { setDateIdx(i); setHeure(''); }}
-                  style={{ flexShrink: 0, padding: '8px 14px', borderRadius: 8, border: `1px solid ${dateIdx === i ? 'var(--brass)' : 'var(--border)'}`, background: dateIdx === i ? 'var(--brass-pale)' : 'var(--surface2)', color: dateIdx === i ? 'var(--brass)' : 'var(--text-dim)', cursor: 'pointer', textAlign: 'center', minWidth: 58 }}>
+                  style={{ position: 'relative', flexShrink: 0, padding: '8px 14px', borderRadius: 8, border: `1px solid ${dateIdx === i ? 'var(--brass)' : dayPromo ? '#9C7BD0' : 'var(--border)'}`, background: dateIdx === i ? 'var(--brass-pale)' : 'var(--surface2)', color: dateIdx === i ? 'var(--brass)' : 'var(--text-dim)', cursor: 'pointer', textAlign: 'center', minWidth: 58 }}>
                   <div style={{ fontSize: 11, marginBottom: 2 }}>{dayNames[dd.getDay()]}</div>
                   <div style={{ fontWeight: 700, fontSize: 16 }}>{dd.getDate()}</div>
+                  {dayPromo && <span style={{ position: 'absolute', top: -7, right: -7, background: '#9C7BD0', color: '#fff', fontSize: 10, fontWeight: 700, padding: '1px 5px', borderRadius: 8 }}>−{dayPromo.reduction}%</span>}
                 </button>
               );
             })}
@@ -1316,9 +1416,17 @@ function QuickBook({ salon, preselectedBarbier, client, onConfirmed }) {
           {slots.length === 0 && <p style={{ color: 'var(--text-muted)', fontSize: 14 }}>Pas de créneaux ce jour.</p>}
         </div>
 
+        {promo && (
+          <div style={{ background: 'rgba(156,123,208,.12)', border: '1px solid rgba(156,123,208,.4)', borderRadius: 8, padding: '10px 12px', marginBottom: 12, fontSize: 14, color: '#C9AEF0', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Icon name="bolt" size={15} /> Offre du jour : <strong>−{promo.reduction}%</strong> sur cette date !
+          </div>
+        )}
+
         {heure && (
           <button className="btn btn-b" style={{ width: '100%' }} onClick={confirm}>
-            Confirmer — {prestation} avec {barbier} le {fmtDate(selectedDate)} à {heure} · {barbierObj?.tarifs[prestation]} €
+            Confirmer — {prestation} avec {barbier} le {fmtDate(selectedDate)} à {heure} · {promo
+              ? <span style={{ marginLeft: 4 }}><s style={{ opacity: .6 }}>{prixBase} €</s> {prixFinal} €</span>
+              : `${prixFinal} €`}
           </button>
         )}
       </>}
@@ -1393,6 +1501,13 @@ function SalonDetail({ salon: initialSalon, client, onBack, onBook, onUpdateClie
 
         {salon.infos && (
           <p className="afu s2" style={{ color: 'var(--text-dim)', fontSize: 15, marginBottom: 16, lineHeight: 1.6 }}>{salon.infos}</p>
+        )}
+
+        {salon.promo?.date >= today() && (
+          <div className="afu s2" style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'rgba(156,123,208,.12)', border: '1px solid rgba(156,123,208,.4)', borderRadius: 10, padding: '12px 14px', marginBottom: 16 }}>
+            <Icon name="bolt" size={18} style={{ color: '#C9AEF0' }} />
+            <span style={{ fontSize: 14, color: '#C9AEF0' }}>Offre spéciale : <strong>−{salon.promo.reduction}%</strong> le {fmtDate(salon.promo.date)}</span>
+          </div>
         )}
       </div>
 
@@ -1575,7 +1690,12 @@ puis confirme au client.`;
           if (data.salonId) {
             const salonData = sget(`salon:${data.salonId}`);
             const barb = (salonData?.barbiers || []).find(b => b.nom === data.barbier);
-            if (barb?.tarifs?.[data.prestation]) rdv.prix = barb.tarifs[data.prestation];
+            if (barb?.tarifs?.[data.prestation]) {
+              const base = barb.tarifs[data.prestation];
+              const promo = getPromo(salonData, data.date);
+              rdv.prix = applyPromo(base, promo);
+              if (promo) { rdv.prixBase = base; rdv.promo = promo.reduction; }
+            }
           }
           sset(`rdv:${rdvId}`, rdv);
           if (client) {
@@ -1620,10 +1740,11 @@ puis confirme au client.`;
       {rdvConfirmed && (
         <div className="afu" style={{ background: '#3D7A5420', border: '1px solid var(--success)', borderRadius: 8, padding: 16, marginBottom: 14 }}>
           <h4 style={{ color: '#7DC89A', marginBottom: 6 }}>✓ Rendez-vous confirmé !</h4>
-          <p style={{ fontSize: 14, color: 'var(--text-dim)' }}>
+          <p style={{ fontSize: 14, color: 'var(--text-dim)', marginBottom: 12 }}>
             {rdvConfirmed.prestation} avec {rdvConfirmed.barbier} · {fmtDate(rdvConfirmed.date)} à {rdvConfirmed.heure}
-            {rdvConfirmed.prix ? ` · ${rdvConfirmed.prix} €` : ''}
+            {rdvConfirmed.prix ? ` · ${rdvConfirmed.prix} €` : ''}{rdvConfirmed.promo ? ` (−${rdvConfirmed.promo}%)` : ''}
           </p>
+          <AddToCalendar rdv={rdvConfirmed} salon={sget(`salon:${rdvConfirmed.salonId}`)} compact />
         </div>
       )}
 
@@ -1660,8 +1781,19 @@ function ClientAccount({ client, onUpdateClient, onBack, onRebook }) {
   const [waiting, setWaiting] = useState([]);
   const [rdvs, setRdvs] = useState([]);
   const [favSalons, setFavSalons] = useState([]);
+  const [notifs, setNotifs] = useState([]);
   const [newAvis, setNewAvis] = useState(null);
   const [avisForm, setAvisForm] = useState({ note: 5, commentaire: '' });
+  const [copied, setCopied] = useState(false);
+
+  // Ensure client has a referral code (for accounts created before this feature)
+  useEffect(() => {
+    if (!client.codeParrainage) {
+      const upd = { ...client, codeParrainage: genCode('BL'), filleuls: client.filleuls || [], recompenses: client.recompenses || 0 };
+      sset(`client:${client.id}`, upd);
+      onUpdateClient(upd);
+    }
+  }, []);
 
   useEffect(() => {
     const allRdv = getAllByPrefix('rdv:').filter(r => r.clientId === client.id);
@@ -1670,7 +1802,14 @@ function ClientAccount({ client, onUpdateClient, onBack, onRebook }) {
     setFavSalons(favs);
     const att = getAllByPrefix('attente:').filter(a => a.clientId === client.id);
     setWaiting(att);
+    const myNotifs = getAllByPrefix('notif:').filter(n => n.clientId === client.id).sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+    setNotifs(myNotifs);
   }, [client]);
+
+  function dismissNotif(id) {
+    sdel(`notif:${id}`);
+    setNotifs(prev => prev.filter(n => n.id !== id));
+  }
 
   function submitAvis() {
     const a = { id: 'avis_' + uid(), salonId: newAvis.salonId, barbier: newAvis.barbier, clientNom: client.nom, note: avisForm.note, commentaire: avisForm.commentaire, date: today() };
@@ -1679,7 +1818,31 @@ function ClientAccount({ client, onUpdateClient, onBack, onRebook }) {
     setAvisForm({ note: 5, commentaire: '' });
   }
 
-  const tabs = [{ id: 'rdv', label: <L icon="list" size={15}>Mes RDV</L> }, { id: 'favoris', label: <L icon="heart" size={15}>Favoris</L> }, { id: 'attente', label: <L icon="hourglass" size={15}>Attente</L> }];
+  function shareCode() {
+    const txt = `Rejoins-moi sur BarberLink ! Utilise mon code de parrainage ${client.codeParrainage} à l'inscription, on gagne tous les deux une réduction.`;
+    if (navigator.share) {
+      navigator.share({ title: 'BarberLink', text: txt }).catch(() => {});
+    } else if (navigator.clipboard) {
+      navigator.clipboard.writeText(txt).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); }).catch(() => {});
+    }
+  }
+
+  // Client reminders: confirmed/pending RDV in the next 48h
+  const nowMs = Date.now();
+  const upcomingReminders = rdvs.filter(r => {
+    if (r.statut === 'annulé') return false;
+    const dt = new Date(`${r.date}T${r.heure || '00:00'}`).getTime();
+    return dt >= nowMs && dt <= nowMs + 48 * 3600 * 1000;
+  }).sort((a, b) => (a.date + a.heure).localeCompare(b.date + b.heure));
+
+  const unread = notifs.filter(n => !n.lu);
+
+  const tabs = [
+    { id: 'rdv', label: <L icon="list" size={15}>Mes RDV</L> },
+    { id: 'favoris', label: <L icon="heart" size={15}>Favoris</L> },
+    { id: 'attente', label: <L icon="hourglass" size={15}>Attente</L> },
+    { id: 'parrainage', label: <L icon="users" size={15}>Parrainage</L> },
+  ];
 
   return (
     <div style={{ maxWidth: 700, margin: '0 auto', padding: '24px 16px' }}>
@@ -1691,21 +1854,58 @@ function ClientAccount({ client, onUpdateClient, onBack, onRebook }) {
         <button onClick={onBack} className="btn btn-o btn-sm">← Annuaire</button>
       </div>
 
+      {/* Notifications (smart waiting list + parrainage) */}
+      {notifs.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
+          {notifs.map(n => (
+            <div key={n.id} className="afu" style={{ display: 'flex', alignItems: 'flex-start', gap: 10, background: n.type === 'attente' ? 'rgba(76,140,106,.12)' : 'var(--brass-pale)', border: `1px solid ${n.type === 'attente' ? 'rgba(76,140,106,.35)' : 'var(--brass-dim)'}`, borderRadius: 10, padding: '12px 14px' }}>
+              <Icon name={n.type === 'attente' ? 'bolt' : 'users'} size={16} style={{ marginTop: 2, color: n.type === 'attente' ? '#7FD0A4' : 'var(--brass)' }} />
+              <div style={{ flex: 1 }}>
+                <p style={{ fontSize: 14, color: 'var(--text)' }}>{n.message}</p>
+                {n.type === 'attente' && (
+                  <button className="btn btn-b btn-sm" style={{ marginTop: 8 }} onClick={() => { const s = sget(`salon:${n.salonId}`); if (s) onRebook({ salonId: n.salonId, barbier: n.barbier, prestation: n.prestation }); dismissNotif(n.id); }}>Réserver ce créneau</button>
+                )}
+              </div>
+              <button onClick={() => dismissNotif(n.id)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 16, flexShrink: 0 }}>✕</button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Reminders banner */}
+      {upcomingReminders.length > 0 && (
+        <div className="afu" style={{ background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: 12, padding: '14px 16px', marginBottom: 16 }}>
+          <p style={{ fontSize: 12, textTransform: 'uppercase', letterSpacing: '.08em', color: 'var(--text-muted)', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}><Icon name="clock" size={13} /> Rappel — bientôt</p>
+          {upcomingReminders.map(r => {
+            const s = getAllByPrefix('salon:').find(x => x.id === r.salonId);
+            return (
+              <div key={r.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginTop: 4 }}>
+                <span style={{ fontSize: 14 }}><strong style={{ color: 'var(--cream)' }}>{r.prestation}</strong> avec {r.barbier} · {fmtDate(r.date)} à {r.heure}{s ? ` · ${s.nom}` : ''}</span>
+                <AddToCalendar rdv={r} salon={s} compact />
+              </div>
+            );
+          })}
+        </div>
+      )}
+
       <Tabs tabs={tabs} active={tab} onChange={setTab} />
 
       {tab === 'rdv' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           {rdvs.length === 0 && <p style={{ color: 'var(--text-muted)' }}>Aucun rendez-vous.</p>}
-          {rdvs.map((r, i) => (
+          {rdvs.map((r, i) => {
+            const sObj = getAllByPrefix('salon:').find(s => s.id === r.salonId);
+            return (
             <div key={r.id} className="afu card-hover" style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 8, padding: 14, animationDelay: `${i * 0.07}s` }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
                 <div>
                   <p style={{ fontWeight: 700, color: 'var(--cream)' }}>{r.prestation} <span style={{ color: 'var(--text-dim)', fontWeight: 400 }}>avec {r.barbier}</span></p>
-                  <p style={{ color: 'var(--text-dim)', fontSize: 14 }}>{fmtDate(r.date)} à {r.heure}{r.prix ? ` · ${r.prix} €` : ''}</p>
-                  <p style={{ color: 'var(--text-muted)', fontSize: 13 }}>{getAllByPrefix('salon:').find(s => s.id === r.salonId)?.nom}</p>
+                  <p style={{ color: 'var(--text-dim)', fontSize: 14 }}>{fmtDate(r.date)} à {r.heure}{r.prix ? ` · ${r.prix} €` : ''}{r.promo ? <span style={{ color: '#C9AEF0' }}> (−{r.promo}%)</span> : ''}</p>
+                  <p style={{ color: 'var(--text-muted)', fontSize: 13 }}>{sObj?.nom}</p>
                 </div>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start', flexWrap: 'wrap' }}>
                   <StatutBadge statut={r.statut} />
+                  {r.date >= today() && r.statut !== 'annulé' && <AddToCalendar rdv={r} salon={sObj} compact />}
                   <button className="btn btn-o btn-sm" onClick={() => onRebook(r)}>↻ Re-réserver</button>
                   {r.date >= today() && r.statut !== 'annulé' && (
                     <button className="btn btn-r btn-sm" onClick={() => {
@@ -1720,7 +1920,8 @@ function ClientAccount({ client, onUpdateClient, onBack, onRebook }) {
                 </div>
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -1741,6 +1942,7 @@ function ClientAccount({ client, onUpdateClient, onBack, onRebook }) {
 
       {tab === 'attente' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <p style={{ color: 'var(--text-dim)', fontSize: 14, marginBottom: 4 }}>Inscrit sur une liste d'attente, vous êtes prévenu automatiquement dès qu'un créneau se libère.</p>
           {waiting.length === 0 && <p style={{ color: 'var(--text-muted)' }}>Aucune liste d'attente active.</p>}
           {waiting.map(a => {
             const s = sget(`salon:${a.salonId}`);
@@ -1752,6 +1954,30 @@ function ClientAccount({ client, onUpdateClient, onBack, onRebook }) {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {tab === 'parrainage' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div style={{ background: 'linear-gradient(135deg, rgba(156,123,208,.18), rgba(156,123,208,.05))', border: '1px solid rgba(156,123,208,.35)', borderRadius: 14, padding: 22, textAlign: 'center' }}>
+            <Icon name="users" size={26} style={{ color: '#C9AEF0', marginBottom: 8 }} />
+            <h3 style={{ marginBottom: 6 }}>Parrainez vos amis</h3>
+            <p style={{ color: 'var(--text-dim)', fontSize: 14, marginBottom: 18 }}>Partagez votre code. À chaque ami qui s'inscrit, vous gagnez tous les deux une réduction sur votre prochaine coupe.</p>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, marginBottom: 16 }}>
+              <span style={{ fontFamily: "'Fraunces',serif", fontSize: 28, fontWeight: 700, letterSpacing: '.06em', color: 'var(--cream)', background: 'var(--surface2)', border: '1px dashed var(--brass-dim)', borderRadius: 10, padding: '8px 20px' }}>{client.codeParrainage || '…'}</span>
+            </div>
+            <button className="btn btn-b" onClick={shareCode}><Icon name="chat" size={15} /> {copied ? '✓ Copié !' : 'Partager mon code'}</button>
+          </div>
+          <div style={{ display: 'flex', gap: 12 }}>
+            <div className="stat-card">
+              <div style={{ fontFamily: "'Fraunces',serif", fontSize: 30, fontWeight: 700, color: 'var(--cream)' }}>{(client.filleuls || []).length}</div>
+              <div style={{ color: 'var(--text-dim)', fontSize: 13 }}>Amis parrainés</div>
+            </div>
+            <div className="stat-card">
+              <div style={{ fontFamily: "'Fraunces',serif", fontSize: 30, fontWeight: 700, color: '#C9AEF0' }}>{client.recompenses || 0}</div>
+              <div style={{ color: 'var(--text-dim)', fontSize: 13 }}>Réductions gagnées</div>
+            </div>
+          </div>
         </div>
       )}
 
@@ -1857,14 +2083,22 @@ function AppointmentTab({ salon, onRefresh }) {
   }
 
   function notifyWaitingOnCancel(rdv) {
-    const waitList = getAllByPrefix('attente:').filter(a => a.salonId === rdv.salonId && a.barbier === rdv.barbier && (a.creneauxSouhaites || []).includes(rdv.heure));
-    waitList.forEach(a => {
-      // In real app: send notification. Here: just mark with flag.
-      const client = sget(`client:${a.clientId}`);
-      if (client) {
-        // Would notify client here
-      }
+    // Smart waiting list: find people waiting for this barber on this freed slot,
+    // notify the first in line (FIFO by createdAt) and remove their waitlist entry.
+    const waitList = getAllByPrefix('attente:')
+      .filter(a => a.salonId === rdv.salonId && a.barbier === rdv.barbier && (a.creneauxSouhaites || []).includes(rdv.heure))
+      .sort((a, b) => (a.createdAt || '').localeCompare(b.createdAt || ''));
+    const first = waitList[0];
+    if (!first) return;
+    const salonObj = sget(`salon:${rdv.salonId}`);
+    const nid = 'notif_' + uid();
+    sset(`notif:${nid}`, {
+      id: nid, clientId: first.clientId, type: 'attente',
+      message: `Un créneau s'est libéré chez ${salonObj?.nom || 'votre salon'} : ${first.prestation} avec ${rdv.barbier} le ${fmtDate(rdv.date)} à ${rdv.heure}. Réservez vite !`,
+      salonId: rdv.salonId, barbier: rdv.barbier, prestation: first.prestation, date: rdv.date, heure: rdv.heure,
+      lu: false, createdAt: new Date().toISOString(),
     });
+    sdel(`attente:${first.id}`);
   }
 
   function deleteRdv(id) {
@@ -2032,6 +2266,9 @@ function ParamsTab({ salon, onUpdate }) {
     lienAvisGoogle: salon.lienAvisGoogle || '',
     infos: salon.infos || '',
     horaires: salon.horaires && typeof salon.horaires === 'object' ? salon.horaires : { ...HORAIRES_DEFAULT },
+    promoActive: !!salon.promo,
+    promoDate: salon.promo?.date || '',
+    promoReduction: salon.promo?.reduction || 15,
   });
   const [saved, setSaved] = useState(false);
 
@@ -2039,7 +2276,9 @@ function ParamsTab({ salon, onUpdate }) {
   const updHoraire = (j, k, v) => setForm(f => ({ ...f, horaires: { ...f.horaires, [j]: { ...f.horaires[j], [k]: v } } }));
 
   function save() {
-    onUpdate({ ...salon, ...form });
+    const { promoActive, promoDate, promoReduction, ...rest } = form;
+    const promo = (promoActive && promoDate && promoReduction > 0) ? { date: promoDate, reduction: Number(promoReduction) } : null;
+    onUpdate({ ...salon, ...rest, promo });
     setSaved(true);
     setTimeout(() => setSaved(false), 2500);
   }
@@ -2084,6 +2323,32 @@ function ParamsTab({ salon, onUpdate }) {
               );
             })}
           </div>
+        </div>
+
+        {/* Promotion sur une date précise */}
+        <div style={{ background: 'var(--surface2)', border: `1px solid ${form.promoActive ? 'rgba(156,123,208,.4)' : 'var(--border)'}`, borderRadius: 12, padding: 16 }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', marginBottom: form.promoActive ? 14 : 0 }}>
+            <input type="checkbox" checked={form.promoActive} onChange={e => upd('promoActive', e.target.checked)} style={{ accentColor: '#9C7BD0', width: 16, height: 16 }} />
+            <span style={{ fontWeight: 600, fontSize: 15 }}><Icon name="bolt" size={15} style={{ color: '#C9AEF0' }} /> Offre sur une date précise</span>
+          </label>
+          {form.promoActive && (
+            <>
+              <p style={{ color: 'var(--text-dim)', fontSize: 13, marginBottom: 12 }}>Choisissez un jour creux du mois et appliquez une réduction pour le remplir. La promo s'affiche aux clients lors de la réservation.</p>
+              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                <div style={{ flex: '1 1 160px' }}>
+                  <label style={{ fontSize: 12, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Date de l'offre</label>
+                  <input type="date" className="fi" value={form.promoDate} min={today()} onChange={e => upd('promoDate', e.target.value)} />
+                </div>
+                <div style={{ flex: '0 0 120px' }}>
+                  <label style={{ fontSize: 12, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Réduction</label>
+                  <div style={{ position: 'relative' }}>
+                    <input type="number" className="fi" min={5} max={70} value={form.promoReduction} onChange={e => upd('promoReduction', e.target.value)} style={{ paddingRight: 28 }} />
+                    <span style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', fontSize: 13 }}>%</span>
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
         </div>
       </div>
     </div>
