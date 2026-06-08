@@ -1,0 +1,10 @@
+{
+  "name": "barberlink-paiements",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Fonction serverless Stripe Checkout pour BarberLink (encaissement au montant exact).",
+  "type": "module",
+  "dependencies": {
+    "stripe": "^17.0.0"
+  }
+}

@@ -48,10 +48,20 @@ Aucun serveur n'est nécessaire : on utilise des **liens de paiement** (no-code)
    ouvre la page sécurisée du prestataire. Les virements arrivent sur le compte
    bancaire du salon.
 
-> Pour un encaissement entièrement automatisé (montant dynamique par prestation,
-> confirmation automatique via webhook), ajouter une petite fonction serverless
-> (Netlify/Vercel Functions) avec l'API Stripe Checkout. Le système de liens
-> ci-dessus fonctionne sans aucun code serveur.
+### Encaissement automatique (montant exact par prestation)
+
+Pour facturer le **prix réel** de chaque prestation (sans créer un lien par
+coupe), le projet inclut une fonction serverless **`api/checkout.js`** (Stripe
+Checkout) à déployer sur Vercel. Dans l'onglet **Paiements**, choisis la méthode
+**« Automatique ✨ »** et colle l'URL de la fonction.
+
+👉 Guide pas à pas : **[`PAIEMENTS.md`](./PAIEMENTS.md)**
+
+| Fichier | Rôle |
+|---|---|
+| `api/checkout.js` | Fonction serverless : crée la session Stripe au montant exact |
+| `package.json` | Dépendance `stripe` (installée par Vercel) |
+| `vercel.json` | Config de déploiement Vercel |
 
 ## Développement
 
