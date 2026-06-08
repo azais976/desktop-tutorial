@@ -55,6 +55,10 @@ coupe), le projet inclut une fonction serverless **`api/checkout.js`** (Stripe
 Checkout) à déployer sur Vercel. Dans l'onglet **Paiements**, choisis la méthode
 **« Automatique ✨ »** et colle l'URL de la fonction.
 
+**Déploiement 1-clic** (te demande seulement ta clé Stripe) :
+
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fazais976%2Fdesktop-tutorial&env=STRIPE_SECRET_KEY&envDescription=Votre%20cl%C3%A9%20secr%C3%A8te%20Stripe%20(commence%20par%20sk_)&envLink=https%3A%2F%2Fdashboard.stripe.com%2Fapikeys&project-name=barberlink-paiements&repository-name=barberlink-paiements)
+
 👉 Guide pas à pas : **[`PAIEMENTS.md`](./PAIEMENTS.md)**
 
 | Fichier | Rôle |
