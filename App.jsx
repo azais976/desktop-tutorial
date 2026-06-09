@@ -409,7 +409,6 @@ function BarberPole3D({ height = 64, width = 16, delay = 0, capH }) {
 function PoleHeader({ onAdmin }) {
   return (
     <header style={{ background: 'rgba(10,10,11,.85)', backdropFilter: 'blur(12px)', borderBottom: '1px solid var(--border)', padding: '0 18px', height: 58, display: 'flex', alignItems: 'center', gap: 12, position: 'sticky', top: 0, zIndex: 90 }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 34, flexShrink: 0 }}><BarberPole3D height={30} width={11} capH={6} /></div>
       <span style={{ fontFamily: "'Fraunces', serif", fontSize: 23, fontWeight: 600, color: 'var(--text)', letterSpacing: '-.02em' }}>BarberLink</span>
       <div style={{ flex: 1 }} />
       <button onClick={onAdmin} className="btn btn-o btn-sm" style={{ fontSize: 12 }}>Admin</button>
