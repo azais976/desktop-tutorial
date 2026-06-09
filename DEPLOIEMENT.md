@@ -45,9 +45,14 @@ Microsoft) emballe la PWA en application native, sans réécrire le code.
 
 ### 🤖 Google Play (Android)
 - Clique **Package for stores → Android**
-- Télécharge le `.aab` généré
+- Télécharge le `.zip` : il contient le `.aab` (à envoyer au store) **et** un
+  fichier `assetlinks.json` avec ton **empreinte SHA-256**.
+- Ouvre ce `assetlinks.json` et copie l'empreinte `sha256_cert_fingerprints`
+  dans le fichier **`.well-known/assetlinks.json`** de ce dépôt (remplace
+  `REMPLACER_PAR_VOTRE_EMPREINTE_SHA256`), puis `push`. ➜ l'app s'ouvre alors
+  en plein écran, sans barre de navigateur (exactement comme Planity).
 - Compte développeur Google Play : **25 $ une seule fois**
-- Dépose le `.aab` dans la Google Play Console
+- Dépose le `.aab` dans la Google Play Console → ton app est sur le Play Store.
 
 ### 🪟 Microsoft Store (Windows)
 - Clique **Package for stores → Windows**

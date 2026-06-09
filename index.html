@@ -898,7 +898,7 @@ function SalonRegistration({ onDone, onBack, reseau }) {
 // ============================================================
 // SALON DIRECTORY
 // ============================================================
-function SalonDirectory({ client, onSelectSalon, onAccount, initialPresta, initialVille }) {
+function SalonDirectory({ client, onSelectSalon, onAccount, onHome, initialPresta, initialVille }) {
   const [salons, setSalons] = useState([]);
   const [ville, setVille] = useState(initialVille || '');
   const [tri, setTri] = useState('note');
@@ -945,10 +945,10 @@ function SalonDirectory({ client, onSelectSalon, onAccount, initialPresta, initi
         <div>
           <h2 className="afu">Barbiers à La Réunion</h2>
           <p style={{ color: 'var(--text-dim)', fontSize: 15 }}>
-            Bonjour {client.nom} — <strong style={{ color: 'var(--brass)' }}>{list.length}</strong> salon{list.length !== 1 ? 's' : ''} trouvé{list.length !== 1 ? 's' : ''}
+            {client ? <>Bonjour {client.nom} — </> : null}<strong style={{ color: 'var(--brass)' }}>{list.length}</strong> salon{list.length !== 1 ? 's' : ''} trouvé{list.length !== 1 ? 's' : ''}
           </p>
         </div>
-        <button className="btn btn-o btn-sm" onClick={onAccount}>Mon compte →</button>
+        <button className="btn btn-o btn-sm" onClick={onAccount}>{client ? 'Mon compte →' : 'Se connecter →'}</button>
       </div>
 
       {/* Search + filters */}
@@ -1142,7 +1142,7 @@ function PaiementBox({ salon, rdv }) {
   );
 }
 
-function QuickBook({ salon, preselectedBarbier, client, onConfirmed }) {
+function QuickBook({ salon, preselectedBarbier, client, onConfirmed, onRequireAccount }) {
   const [barbier, setBarbier] = useState(preselectedBarbier || salon.barbiers?.[0]?.nom || '');
   const [prestation, setPrestation] = useState('');
   const [dateIdx, setDateIdx] = useState(0);
@@ -1175,6 +1175,8 @@ function QuickBook({ salon, preselectedBarbier, client, onConfirmed }) {
   const prixFinal = applyPromo(prixBase, promo);
 
   function confirm() {
+    // Exploration libre : le compte est requis seulement ici, au moment de confirmer.
+    if (!client) { onRequireAccount && onRequireAccount(); return; }
     const id = 'rdv_' + uid();
     const rdv = { id, salonId: salon.id, barbier, prestation, prix: prixFinal, prixBase: promo ? prixBase : undefined, promo: promo ? promoLabel(promo) : undefined, date: selectedDate, heure, clientId: client?.id || 'anon', clientNom: client?.nom || 'Client', clientTel: client?.telephone || '', statut: 'en attente', createdAt: new Date().toISOString() };
     sset(`rdv:${id}`, rdv);
@@ -1285,7 +1287,7 @@ function QuickBook({ salon, preselectedBarbier, client, onConfirmed }) {
 // ============================================================
 // SALON DETAIL
 // ============================================================
-function SalonDetail({ salon: initialSalon, client, onBack, onBook, onUpdateClient }) {
+function SalonDetail({ salon: initialSalon, client, onBack, onBook, onRequireAccount, onUpdateClient }) {
   const [salon, setSalon] = useState(initialSalon);
   const [tab, setTab] = useState('reserver');
   const [isFav, setIsFav] = useState((client?.favoris || []).includes(initialSalon.id));
@@ -1299,7 +1301,7 @@ function SalonDetail({ salon: initialSalon, client, onBack, onBook, onUpdateClie
   }, [initialSalon.id]);
 
   function toggleFav() {
-    if (!client) return;
+    if (!client) { onRequireAccount && onRequireAccount(); return; }
     const favs = client.favoris || [];
     const updated = isFav ? favs.filter(f => f !== salon.id) : [...favs, salon.id];
     const updClient = { ...client, favoris: updated };
@@ -1367,7 +1369,7 @@ function SalonDetail({ salon: initialSalon, client, onBack, onBook, onUpdateClie
 
       {tab === 'reserver' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <QuickBook salon={salon} preselectedBarbier={null} client={client} onConfirmed={() => {}} />
+          <QuickBook salon={salon} preselectedBarbier={null} client={client} onRequireAccount={onRequireAccount} onConfirmed={() => {}} />
           <div style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: 14 }}>
             — ou —&nbsp;
             <button className="btn btn-o btn-sm" onClick={() => onBook(salon, null)}><L icon="chat" size={15}>Réserver avec l'assistant IA</L></button>
@@ -3124,6 +3126,7 @@ function App() {
   const [adminAuth, setAdminAuth] = useState(false);
   const [adminModal, setAdminModal] = useState(false);
   const [searchParams, setSearchParams] = useState({ prestation: '', ville: '' });
+  const [pendingScreen, setPendingScreen] = useState(null); // écran à atteindre après inscription
 
   useEffect(() => {
     // Inject CSS
@@ -3145,14 +3148,36 @@ function App() {
 
   if (!online) return <OfflineScreen onRetry={() => setOnline(navigator.onLine !== false)} />;
 
+  // Exploration libre : on ne demande le compte qu'au moment de réserver.
+  function requireAccount(targetScreen) {
+    if (client) { setScreen(targetScreen); return true; }
+    setPendingScreen(targetScreen);
+    setScreen('client-login');
+    return false;
+  }
+
   function handleBook(s, barbier) {
     setBookingTarget({ salon: s, barbier });
-    setScreen('booking');
+    requireAccount('booking');
   }
 
   function handleRebook(rdv) {
     const s = sget(`salon:${rdv.salonId}`);
-    if (s) { setBookingTarget({ salon: s, barbier: rdv.barbier || null }); setScreen('booking'); }
+    if (s) { setBookingTarget({ salon: s, barbier: rdv.barbier || null }); requireAccount('booking'); }
+  }
+
+  // Après inscription, on reprend l'action en cours (réservation, compte…).
+  function afterLogin(c) {
+    setClient(c);
+    setScreen(pendingScreen || 'directory');
+    setPendingScreen(null);
+  }
+  // Retour depuis l'inscription : on revient là où on était en train d'explorer.
+  function loginBack() {
+    setPendingScreen(null);
+    if (pendingScreen === 'booking') setScreen(selectedSalon ? 'salon-detail' : 'directory');
+    else if (pendingScreen) setScreen('directory');
+    else setScreen('landing');
   }
 
   function handleAdminClick() {
@@ -3175,27 +3200,18 @@ function App() {
       <main>
         {screen === 'landing' && (
           <LandingScreen
-            onClient={() => setScreen('client-login')}
+            onClient={() => { setSearchParams({ prestation: '', ville: '' }); setScreen('directory'); }}
             onSalon={() => setScreen('salon-login')}
-            onSearch={params => { setSearchParams(params); setScreen('client-login-search'); }}
+            onSearch={params => { setSearchParams(params); setScreen('directory'); }}
           />
         )}
 
         {screen === 'client-login' && (
           <Ambient>
             <ClientRegistration
-              onDone={c => { setClient(c); setScreen('directory'); }}
-              onBack={() => setScreen('landing')}
-            />
-          </Ambient>
-        )}
-
-        {screen === 'client-login-search' && (
-          <Ambient>
-            <ClientRegistration
-              onDone={c => { setClient(c); setScreen('directory'); }}
-              onBack={() => setScreen('landing')}
-              subtitle={`Recherche : ${searchParams.prestation || 'tous services'}${searchParams.ville ? ' · ' + searchParams.ville : ''}`}
+              onDone={afterLogin}
+              onBack={loginBack}
+              subtitle={pendingScreen === 'booking' ? 'Dernière étape avant de confirmer votre réservation' : null}
             />
           </Ambient>
         )}
@@ -3219,22 +3235,24 @@ function App() {
           </Ambient>
         )}
 
-        {screen === 'directory' && client && (
+        {screen === 'directory' && (
           <SalonDirectory
             client={client}
             onSelectSalon={s => { setSelectedSalon(s); setScreen('salon-detail'); }}
-            onAccount={() => setScreen('account')}
+            onAccount={() => requireAccount('account')}
+            onHome={() => setScreen('landing')}
             initialPresta={searchParams.prestation}
             initialVille={searchParams.ville}
           />
         )}
 
-        {screen === 'salon-detail' && selectedSalon && client && (
+        {screen === 'salon-detail' && selectedSalon && (
           <SalonDetail
             salon={selectedSalon}
             client={client}
             onBack={() => setScreen('directory')}
             onBook={handleBook}
+            onRequireAccount={() => requireAccount('salon-detail')}
             onUpdateClient={c => setClient(c)}
           />
         )}
