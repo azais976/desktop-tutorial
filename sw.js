@@ -3,14 +3,17 @@
    Stratégie : "network-first" pour le HTML/JS (toujours la dernière version si
    en ligne), "cache-first" pour les ressources statiques (icônes, polices). */
 
-const CACHE = 'barberlink-v2';
+const CACHE = 'barberlink-v3';
 
 // Ressources de base de l'app (app shell)
 const APP_SHELL = [
   './',
   './index.html',
+  './install.html',
+  './affiche.html',
   './App.jsx',
   './manifest.json',
+  './qr-install.svg',
   './icon-192.png',
   './icon-512.png',
   './apple-touch-icon.png',

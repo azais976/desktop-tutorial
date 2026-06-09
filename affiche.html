@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Affiche BarberLink — à imprimer (A4)</title>
+  <style>
+    @page { size: A4; margin: 0; }
+    :root{
+      --bg:#0a0a0b;--ink:#0a0a0b;--cream:#EFE3C8;--cream2:#F6EEDB;
+      --paper:#11110f;--card:#1a1a17;--line:#2e2c26;--dim:#C9BC9E;--muted:#8a8378;
+      --red:#CC2222;--blue:#1A4F9A;--green:#7DC89A;--gold:#D4AF37;
+    }
+    *{box-sizing:border-box;margin:0;padding:0;}
+    body{background:#3a3a3a;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,sans-serif;-webkit-font-smoothing:antialiased;padding:24px;}
+    .bar{max-width:210mm;margin:0 auto 18px;display:flex;gap:10px;justify-content:center;}
+    .bar button{background:var(--cream);color:#1a1a16;border:none;font-weight:700;font-size:15px;padding:12px 22px;border-radius:10px;cursor:pointer;font-family:inherit;}
+    .bar span{color:#ddd;font-size:13px;align-self:center;}
+
+    .sheet{
+      width:210mm;height:297mm;margin:0 auto;background:var(--paper);color:var(--cream);
+      position:relative;overflow:hidden;
+      background-image:radial-gradient(circle at 50% 0%, #1b1b18 0%, #0d0d0b 55%, #0a0a0b 100%);
+      box-shadow:0 12px 50px rgba(0,0,0,.6);
+    }
+    .pad{padding:16mm 15mm;height:100%;display:flex;flex-direction:column;}
+
+    /* En-tête */
+    .head{display:flex;align-items:center;gap:10px;justify-content:center;margin-bottom:3mm;}
+    .pole{width:13px;height:42px;border-radius:99px;overflow:hidden;
+      background:repeating-linear-gradient(115deg,var(--red) 0 11px,#F5F5F5 11px 22px,var(--blue) 22px 33px);
+      background-size:auto 33px;box-shadow:0 2px 6px rgba(0,0,0,.5);}
+    .head h1{font-family:Georgia,'Times New Roman',serif;font-size:38px;font-weight:600;letter-spacing:-.02em;color:var(--cream2);}
+    .tagline{text-align:center;color:var(--dim);font-size:15px;letter-spacing:.16em;text-transform:uppercase;margin-bottom:8mm;}
+
+    /* Bloc QR central */
+    .qrblock{display:flex;flex-direction:column;align-items:center;margin-bottom:8mm;}
+    .qrcard{background:#fff;padding:9px;border-radius:16px;box-shadow:0 8px 24px rgba(0,0,0,.45);}
+    .qrcard img{width:46mm;height:46mm;display:block;}
+    .qrblock .scan{margin-top:9px;font-size:20px;font-weight:800;color:var(--cream2);letter-spacing:-.01em;}
+    .qrblock .scan2{font-size:13px;color:var(--dim);margin-top:2px;}
+    .stores{display:flex;gap:7px;margin-top:8px;}
+    .stores span{font-size:10.5px;color:var(--muted);border:1px solid var(--line);border-radius:6px;padding:3px 8px;letter-spacing:.03em;}
+
+    h2.big{text-align:center;font-size:27px;font-weight:800;letter-spacing:-.02em;margin-bottom:6mm;line-height:1.1;}
+    h2.big em{font-style:italic;color:var(--cream2);font-weight:700;}
+
+    /* Deux colonnes : clients / entreprises */
+    .cols{display:flex;gap:6mm;flex:1;}
+    .col{flex:1;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:7mm 6mm;display:flex;flex-direction:column;}
+    .col .lbl{font-size:11px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;padding:4px 10px;border-radius:99px;align-self:flex-start;margin-bottom:4mm;}
+    .col.client .lbl{background:rgba(107,168,232,.16);color:#9BC4F0;border:1px solid rgba(107,168,232,.35);}
+    .col.pro .lbl{background:rgba(239,227,200,.12);color:var(--cream2);border:1px solid var(--line);}
+    .col h3{font-size:18px;font-weight:800;margin-bottom:4mm;letter-spacing:-.01em;}
+    .col .free{color:var(--green);font-weight:800;}
+    ul{list-style:none;display:flex;flex-direction:column;gap:3mm;margin-bottom:5mm;}
+    li{display:flex;gap:9px;font-size:13.5px;color:var(--dim);line-height:1.35;align-items:flex-start;}
+    li .ck{flex-shrink:0;width:17px;height:17px;border-radius:50%;background:rgba(125,200,154,.16);color:var(--green);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;margin-top:1px;}
+
+    /* Tarifs entreprises */
+    .tiers{margin-top:auto;display:flex;flex-direction:column;gap:2.4mm;}
+    .tier{display:flex;justify-content:space-between;align-items:center;background:var(--paper);border:1px solid var(--line);border-radius:9px;padding:7px 11px;}
+    .tier b{font-size:13px;}
+    .tier .price{font-weight:800;font-size:14px;color:var(--cream2);}
+    .tier small{display:block;font-size:10.5px;color:var(--muted);font-weight:400;}
+    .tier.hl{border-color:var(--gold);background:rgba(212,175,55,.08);}
+    .tier.hl .price{color:var(--gold);}
+
+    .foot{margin-top:7mm;text-align:center;border-top:1px solid var(--line);padding-top:5mm;}
+    .foot .url{font-size:16px;font-weight:700;color:var(--cream2);letter-spacing:.01em;}
+    .foot .sub{font-size:12px;color:var(--muted);margin-top:2px;}
+
+    @media print{
+      body{background:#fff;padding:0;}
+      .bar{display:none;}
+      .sheet{box-shadow:none;margin:0;width:210mm;height:297mm;}
+      *{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+    }
+  </style>
+</head>
+<body>
+  <div class="bar">
+    <button onclick="window.print()">🖨️ Imprimer / Enregistrer en PDF</button>
+    <span>Format A4 · prêt à afficher en salon, vitrine ou comptoir</span>
+  </div>
+
+  <div class="sheet">
+    <div class="pad">
+      <div class="head"><span class="pole"></span><h1>BarberLink</h1><span class="pole"></span></div>
+      <div class="tagline">Les barbiers de La Réunion · 974</div>
+
+      <div class="qrblock">
+        <div class="qrcard"><img src="./qr-install.svg" alt="QR code BarberLink" /></div>
+        <div class="scan">Scannez · Installez · Réservez</div>
+        <div class="scan2">Pointez l'appareil photo de votre téléphone sur le code</div>
+        <div class="stores"><span>iPhone</span><span>Android</span><span>Ordinateur</span><span>100% gratuit</span></div>
+      </div>
+
+      <h2 class="big">Trouvez votre barbier <em>en 3 clics</em></h2>
+
+      <div class="cols">
+        <div class="col client">
+          <span class="lbl">Pour les clients</span>
+          <h3>Réservez en <span class="free">2 min</span>, gratuitement</h3>
+          <ul>
+            <li><span class="ck">✓</span>Comparez avis, photos et tarifs près de chez vous</li>
+            <li><span class="ck">✓</span>Réservez 24h/24, créneaux en temps réel</li>
+            <li><span class="ck">✓</span>Payez en ligne : CB · Apple Pay · Google Pay</li>
+            <li><span class="ck">✓</span>Rappels automatiques, fini les rendez-vous oubliés</li>
+            <li><span class="ck">✓</span>Parrainez vos amis et gagnez des réductions</li>
+          </ul>
+          <div style="margin-top:auto;background:var(--paper);border:1px solid var(--line);border-radius:9px;padding:9px 11px;font-size:12.5px;color:var(--dim);">
+            <b style="color:var(--cream2);">Sans carte bancaire</b> à l'inscription. Aucun engagement.
+          </div>
+        </div>
+
+        <div class="col pro">
+          <span class="lbl">Pour les salons</span>
+          <h3>Remplissez votre agenda</h3>
+          <ul>
+            <li><span class="ck">✓</span>Agenda en ligne + fiche salon visible 24/7</li>
+            <li><span class="ck">✓</span>Encaissez acomptes &amp; paiements automatiquement</li>
+            <li><span class="ck">✓</span>Avis, rappels, relances clients inclus</li>
+          </ul>
+          <div class="tiers">
+            <div class="tier"><div><b>Essentiel</b><small>Agenda + fiche + RDV en ligne</small></div><span class="price">49&nbsp;€<small>/mois</small></span></div>
+            <div class="tier"><div><b>Croissance</b><small>+ rappels &amp; avis clients</small></div><span class="price">99&nbsp;€<small>/mois</small></span></div>
+            <div class="tier hl"><div><b>Premium</b><small>+ relances &amp; paiements en ligne</small></div><span class="price">179&nbsp;€<small>/mois</small></span></div>
+            <div class="tier"><div><b>Réseau</b><small>Multi-salons · +50&nbsp;€ / salon</small></div><span class="price">199&nbsp;€<small>/mois</small></span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="foot">
+        <div class="url">azais976.github.io/desktop-tutorial</div>
+        <div class="sub">Scannez le QR code ci-dessus pour installer l'application gratuitement</div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
