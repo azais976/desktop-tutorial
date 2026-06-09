@@ -237,6 +237,42 @@ function montantEnLigne(prix, pai) {
   return Math.max(1, Math.round(prix * (pai.acompte / 100)));
 }
 
+// ---- Abonnements salons (revenus plateforme, jours offerts) ----------------
+function addDays(dateStr, n) { const d = new Date(dateStr); d.setDate(d.getDate() + n); return d.toISOString().split('T')[0]; }
+function addMonths(dateStr, n) { const d = new Date(dateStr); d.setMonth(d.getMonth() + n); return d.toISOString().split('T')[0]; }
+function daysBetween(a, b) { return Math.round((new Date(b) - new Date(a)) / 86400000); }
+// Prix mensuel réel d'un salon (Réseau = base + extra par salon supplémentaire).
+function prixMensuel(salon, allSalons) {
+  const f = FORFAITS[salon.forfait];
+  if (!f) return 0;
+  let total = f.prix;
+  if (salon.forfait === 'reseau') {
+    const net = (allSalons || []).filter(s => (s.reseauId || s.id) === (salon.reseauId || salon.id));
+    total += Math.max(0, net.length - 1) * (f.extraParSalon || 0);
+  }
+  if (salon.miseEnAvant) total += 29; // mise en avant payante
+  return total;
+}
+// État d'abonnement : prochaine échéance, jours restants, période offerte.
+function getAbonnement(salon, allSalons) {
+  const t = today();
+  const debut = (salon.abonnementDebut || salon.createdAt || t).split('T')[0];
+  let next = debut;
+  let guard = 0;
+  while (next <= t && guard < 600) { next = addMonths(next, 1); guard++; }
+  const gratuitJusqu = salon.gratuitJusqu || '';
+  const offert = !!gratuitJusqu && gratuitJusqu > t;
+  // Si le salon est offert au-delà de la prochaine échéance, on repousse le paiement.
+  const prochain = offert && gratuitJusqu > next ? gratuitJusqu : next;
+  const joursRestants = Math.max(0, daysBetween(t, prochain));
+  return { debut, prochain, joursRestants, gratuitJusqu, offert, prix: prixMensuel(salon, allSalons) };
+}
+// Renvoie un salon mis à jour avec n jours d'abonnement offerts (cumulables).
+function offrirJours(salon, n) {
+  const base = salon.gratuitJusqu && salon.gratuitJusqu > today() ? salon.gratuitJusqu : today();
+  return { ...salon, gratuitJusqu: addDays(base, n) };
+}
+
 // ============================================================
 // ICONS (elegant thin line — no emoji)
 // ============================================================
@@ -274,6 +310,10 @@ const ICONS = {
   card: <g><rect x="2.5" y="5" width="19" height="14" rx="2.5"/><line x1="2.5" y1="9.5" x2="21.5" y2="9.5"/><line x1="6" y1="14.5" x2="10" y2="14.5"/></g>,
   shield: <g><path d="M12 3l7 3v5c0 4.4-3 7.8-7 9-4-1.2-7-4.6-7-9V6l7-3z"/><polyline points="9 12 11.5 14.5 16 9.5"/></g>,
   external: <g><path d="M14 4h6v6"/><line x1="20" y1="4" x2="11" y2="13"/><path d="M18 14v5a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 4 19V8a1.5 1.5 0 0 1 1.5-1.5h5"/></g>,
+  gift: <g><rect x="3.5" y="8" width="17" height="4" rx="1"/><path d="M5 12v8.5h14V12"/><line x1="12" y1="8" x2="12" y2="20.5"/><path d="M12 8C12 8 11 3.5 8.2 3.5a2.2 2.2 0 0 0 0 4.5zM12 8C12 8 13 3.5 15.8 3.5a2.2 2.2 0 0 1 0 4.5z"/></g>,
+  euro: <g><path d="M18.5 6.2A7 7 0 0 0 7 11.5M7 11.5a7 7 0 0 0 11.5 5.3"/><line x1="3.5" y1="10" x2="12" y2="10"/><line x1="3.5" y1="13.5" x2="11" y2="13.5"/></g>,
+  building: <g><rect x="4" y="3" width="16" height="18" rx="1.5"/><line x1="9" y1="7" x2="9" y2="7"/><line x1="15" y1="7" x2="15" y2="7"/><line x1="9" y1="11" x2="9" y2="11"/><line x1="15" y1="11" x2="15" y2="11"/><path d="M10 21v-4h4v4"/></g>,
+  ban: <g><circle cx="12" cy="12" r="8.5"/><line x1="6" y1="6" x2="18" y2="18"/></g>,
 };
 
 function Icon({ name, size = 17, stroke = 1.5, style }) {
@@ -473,8 +513,8 @@ function SplineBackground({ url = SPLINE_URL, overlay = 'linear-gradient(to bott
         style: { width: '100%', height: '100%', opacity: dim, display: 'block' },
       })}
       <div style={{ position: 'absolute', inset: 0, background: overlay, pointerEvents: 'none' }} />
-      {/* Cover the "Built with Spline" watermark (bottom-right) */}
-      <div style={{ position: 'absolute', bottom: 0, right: 0, width: 150, height: 44, background: 'var(--bg)', pointerEvents: 'none' }} />
+      {/* Masque le badge « Built with Spline » (en bas à droite) */}
+      <div style={{ position: 'absolute', bottom: 0, right: 0, width: 185, height: 56, background: 'var(--bg)', zIndex: 3, pointerEvents: 'auto' }} />
     </div>
   );
 }
@@ -655,7 +695,7 @@ function ClientRegistration({ onDone, onBack, subtitle }) {
       const nid = 'notif_' + uid();
       sset(`notif:${nid}`, { id: nid, clientId: parrain.id, type: 'parrainage', message: `${nom.trim()} a rejoint BarberLink grâce à vous ! Vous gagnez une réduction.`, lu: false, createdAt: new Date().toISOString() });
     }
-    const client = { id, nom: nom.trim(), telephone: tel.trim(), favoris: [], historique: [], codeParrainage: genCode('BL'), filleuls: [], recompenses: parrainePar ? 1 : 0, parrainePar };
+    const client = { id, nom: nom.trim(), telephone: tel.trim(), favoris: [], historique: [], codeParrainage: genCode('BL'), filleuls: [], recompenses: parrainePar ? 1 : 0, parrainePar, createdAt: new Date().toISOString() };
     sset(`client:${id}`, client);
     onDone(client);
   }
@@ -712,7 +752,7 @@ function SalonRegistration({ onDone, onBack, reseau }) {
     const id = 's_' + uid();
     const lat = -20.5 + Math.random() * 1.5;
     const lng = 55.2 + Math.random() * 0.6;
-    const salon = { ...form, id, lat, lng, miseEnAvant: false };
+    const salon = { ...form, id, lat, lng, miseEnAvant: false, createdAt: new Date().toISOString(), abonnementDebut: today() };
     if (reseau) salon.reseauId = reseau.reseauId; // attach to the existing network
     sset(`salon:${id}`, salon);
     onDone(salon);
@@ -2775,83 +2815,292 @@ function AdminLogin({ onDone, onBack }) {
 }
 
 function AdminPanel({ onBack }) {
+  const [tab, setTab] = useState('overview');
   const [salons, setSalons] = useState([]);
-  const [selected, setSelected] = useState(null);
+  const [clients, setClients] = useState([]);
+  const [rdvs, setRdvs] = useState([]);
+  const [avis, setAvis] = useState([]);
+  const [detail, setDetail] = useState(null);     // { type:'salon'|'client', data }
+  const [giftFor, setGiftFor] = useState(null);    // salon recevant des jours offerts
+  const [query, setQuery] = useState('');
 
-  useEffect(() => { setSalons(getAllByPrefix('salon:')); }, []);
-
-  function toggleSponsored(s) {
-    const upd = { ...s, miseEnAvant: !s.miseEnAvant };
-    sset(`salon:${s.id}`, upd);
-    setSalons(prev => prev.map(x => x.id === s.id ? upd : x));
+  function reload() {
+    setSalons(getAllByPrefix('salon:'));
+    setClients(getAllByPrefix('client:'));
+    setRdvs(getAllByPrefix('rdv:'));
+    setAvis(getAllByPrefix('avis:'));
   }
+  useEffect(reload, []);
 
+  function patchSalon(upd) {
+    sset(`salon:${upd.id}`, upd);
+    setSalons(prev => prev.map(x => x.id === upd.id ? upd : x));
+  }
+  function toggleSponsored(s) { patchSalon({ ...s, miseEnAvant: !s.miseEnAvant }); }
+  function changeForfait(s, forfait) { patchSalon({ ...s, forfait }); }
   function deleteSalon(id) {
-    if (!window.confirm('Supprimer ce salon ?')) return;
+    const s = salons.find(x => x.id === id);
+    if (!window.confirm(`Supprimer définitivement « ${s?.nom || id} » et tous ses RDV/avis ?`)) return;
     sdel(`salon:${id}`);
-    setSalons(prev => prev.filter(s => s.id !== id));
+    getAllByPrefix('rdv:').filter(r => r.salonId === id).forEach(r => sdel(`rdv:${r.id}`));
+    getAllByPrefix('avis:').filter(a => a.salonId === id).forEach(a => sdel(`avis:${a.id}`));
+    reload();
+  }
+  function deleteClient(id) {
+    const c = clients.find(x => x.id === id);
+    if (!window.confirm(`Supprimer définitivement le client « ${c?.nom || id} » ?`)) return;
+    sdel(`client:${id}`);
+    setClients(prev => prev.filter(x => x.id !== id));
+  }
+  function giveDays(salon, n) {
+    if (!n || n <= 0) return;
+    patchSalon(offrirJours(salon, n));
+    setGiftFor(null);
   }
 
-  const totalRdv = getAllByPrefix('rdv:').length;
-  const totalAvis = getAllByPrefix('avis:').length;
+  // ---- Indicateurs plateforme -------------------------------------------
+  const mrr = salons.reduce((sum, s) => {
+    const ab = getAbonnement(s, salons);
+    return sum + (ab.offert ? 0 : ab.prix); // les salons offerts ne paient pas ce mois
+  }, 0);
+  const mrrPlein = salons.reduce((sum, s) => sum + prixMensuel(s, salons), 0);
+  const nbOfferts = salons.filter(s => getAbonnement(s, salons).offert).length;
+  const caCarnet = rdvs.filter(r => r.statut !== 'annulé').reduce((s, r) => s + (r.prix || 0), 0);
+
+  const filterFn = (txt) => !query || (txt || '').toLowerCase().includes(query.toLowerCase());
+
+  const tabs = [
+    { id: 'overview', label: <L icon="chart" size={15}>Vue d'ensemble</L> },
+    { id: 'entreprises', label: <L icon="store" size={15}>Entreprises ({salons.length})</L> },
+    { id: 'clients', label: <L icon="users" size={15}>Clients ({clients.length})</L> },
+    { id: 'paiements', label: <L icon="euro" size={15}>Paiements</L> },
+  ];
+
+  const card = { background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 10, padding: 14 };
 
   return (
-    <div style={{ maxWidth: 900, margin: '0 auto', padding: '24px 16px' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+    <div style={{ maxWidth: 980, margin: '0 auto', padding: '24px 16px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, flexWrap: 'wrap', gap: 12 }}>
         <div>
-          <h2>Panneau d'administration</h2>
-          <p style={{ color: 'var(--text-dim)', fontSize: 14 }}>Cockpit de la plateforme BarberLink</p>
+          <h2><L icon="shield" size={22}>Administration BarberLink</L></h2>
+          <p style={{ color: 'var(--text-dim)', fontSize: 14 }}>Cockpit complet de la plateforme</p>
         </div>
-        <button onClick={onBack} className="btn btn-o btn-sm">Retour</button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button onClick={reload} className="btn btn-o btn-sm">↻ Actualiser</button>
+          <button onClick={onBack} className="btn btn-o btn-sm">Retour</button>
+        </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(150px,1fr))', gap: 12, marginBottom: 24 }}>
-        {[
-          { l: 'Salons inscrits', v: salons.length },
-          { l: 'RDV total', v: totalRdv },
-          { l: 'Avis clients', v: totalAvis },
-          { l: 'Salons sponsorisés', v: salons.filter(s => s.miseEnAvant).length },
-        ].map(s => (
-          <div key={s.l} style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 8, padding: 14, textAlign: 'center' }}>
-            <div style={{ fontSize: 24, fontWeight: 600, color: 'var(--cream)', fontFamily: "'Fraunces',serif" }}>{s.v}</div>
-            <div style={{ color: 'var(--text-dim)', fontSize: 12, marginTop: 2 }}>{s.l}</div>
-          </div>
-        ))}
-      </div>
+      <Tabs tabs={tabs} active={tab} onChange={setTab} />
 
-      <h3 style={{ marginBottom: 14, fontSize: 17 }}>Tous les salons</h3>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        {salons.map(s => {
-          const rdvs = getAllByPrefix('rdv:').filter(r => r.salonId === s.id);
-          const avis = getAllByPrefix('avis:').filter(a => a.salonId === s.id);
-          return (
-            <div key={s.id} style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 8, padding: 14 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
-                <div>
-                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 4 }}>
-                    <span style={{ fontWeight: 700 }}>{s.nom}</span>
-                    <Badge>{FORFAITS[s.forfait]?.nom || s.forfait}</Badge>
-                    {s.miseEnAvant && <span className="badge-sponsored">Sponsorisé</span>}
-                  </div>
-                  <p style={{ color: 'var(--text-dim)', fontSize: 14 }}>{s.ville} · {s.adresse}</p>
-                  <p style={{ color: 'var(--text-muted)', fontSize: 13 }}>{rdvs.length} RDV · {avis.length} avis · {s.barbiers?.length} barbier(s)</p>
-                </div>
-                <div style={{ display: 'flex', gap: 6, alignItems: 'flex-start', flexWrap: 'wrap' }}>
-                  <button className="btn btn-o btn-sm" onClick={() => toggleSponsored(s)}>{s.miseEnAvant ? 'Retirer mise en avant' : 'Mettre en avant'}</button>
-                  <button className="btn btn-o btn-sm" onClick={() => setSelected(s)}>Détails</button>
-                  <button className="btn btn-r btn-sm" onClick={() => deleteSalon(s.id)}>Suppr.</button>
-                </div>
+      {/* ============ VUE D'ENSEMBLE ============ */}
+      {tab === 'overview' && (
+        <div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(155px,1fr))', gap: 12, marginBottom: 22 }}>
+            {[
+              { l: 'Clients inscrits', v: clients.length, icon: 'users' },
+              { l: 'Entreprises', v: salons.length, icon: 'store' },
+              { l: 'Revenus / mois', v: mrr + ' €', icon: 'euro', hl: true },
+              { l: 'RDV pris', v: rdvs.length, icon: 'calendar' },
+              { l: 'Avis clients', v: avis.length, icon: 'star' },
+              { l: 'Mises en avant', v: salons.filter(s => s.miseEnAvant).length, icon: 'sparkle' },
+              { l: 'Abonnements offerts', v: nbOfferts, icon: 'gift' },
+              { l: 'Volume réservé', v: caCarnet + ' €', icon: 'card' },
+            ].map(s => (
+              <div key={s.l} style={{ ...card, textAlign: 'center', borderColor: s.hl ? 'var(--brass-dim)' : 'var(--border)', background: s.hl ? 'var(--brass-pale)' : 'var(--card)' }}>
+                <Icon name={s.icon} size={20} style={{ color: 'var(--cream-dim)', marginBottom: 4 }} />
+                <div style={{ fontSize: 24, fontWeight: 600, color: s.hl ? 'var(--brass)' : 'var(--cream)', fontFamily: "'Fraunces',serif" }}>{s.v}</div>
+                <div style={{ color: 'var(--text-dim)', fontSize: 12, marginTop: 2 }}>{s.l}</div>
               </div>
-            </div>
-          );
-        })}
-      </div>
+            ))}
+          </div>
 
-      {selected && (
-        <Modal onClose={() => setSelected(null)} title={`Détails — ${selected.nom}`} width={600}>
-          <pre style={{ color: 'var(--text-dim)', fontSize: 12, whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>{JSON.stringify(selected, null, 2)}</pre>
+          <div style={{ ...card, marginBottom: 16 }}>
+            <h3 style={{ fontSize: 16, marginBottom: 12 }}><L icon="euro" size={17}>Revenus mensuels récurrents</L></h3>
+            <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
+              <div><div style={{ fontSize: 22, fontWeight: 700, color: 'var(--brass)' }}>{mrr} €</div><div style={{ fontSize: 12, color: 'var(--text-dim)' }}>encaissés ce mois</div></div>
+              <div><div style={{ fontSize: 22, fontWeight: 700, color: 'var(--text)' }}>{mrrPlein} €</div><div style={{ fontSize: 12, color: 'var(--text-dim)' }}>potentiel (sans offerts)</div></div>
+              <div><div style={{ fontSize: 22, fontWeight: 700, color: '#C9AEF0' }}>{mrrPlein - mrr} €</div><div style={{ fontSize: 12, color: 'var(--text-dim)' }}>offerts ce mois</div></div>
+            </div>
+          </div>
+
+          <h3 style={{ fontSize: 16, marginBottom: 10 }}>Répartition par formule</h3>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {Object.values(FORFAITS).map(f => {
+              const n = salons.filter(s => s.forfait === f.id).length;
+              if (!n) return null;
+              return (
+                <div key={f.id} style={{ ...card, display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px' }}>
+                  <span style={{ color: f.color, fontWeight: 700 }}>● {f.nom}</span>
+                  <span style={{ color: 'var(--text-dim)' }}>{n} entreprise{n > 1 ? 's' : ''} · {n * f.prix} €/mois</span>
+                </div>
+              );
+            })}
+            {!salons.length && <p style={{ color: 'var(--text-muted)', fontSize: 14 }}>Aucune entreprise inscrite pour l'instant.</p>}
+          </div>
+        </div>
+      )}
+
+      {/* ============ ENTREPRISES ============ */}
+      {tab === 'entreprises' && (
+        <div>
+          <input className="fi" placeholder="Rechercher une entreprise…" value={query} onChange={e => setQuery(e.target.value)} style={{ marginBottom: 14 }} />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {salons.filter(s => filterFn(s.nom) || filterFn(s.ville)).map(s => {
+              const ab = getAbonnement(s, salons);
+              const sRdv = rdvs.filter(r => r.salonId === s.id);
+              const sAvis = avis.filter(a => a.salonId === s.id);
+              return (
+                <div key={s.id} style={card}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
+                    <div style={{ minWidth: 200, flex: 1 }}>
+                      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 4 }}>
+                        <span style={{ fontWeight: 700 }}>{s.nom}</span>
+                        <Badge color={FORFAITS[s.forfait]?.color}>{FORFAITS[s.forfait]?.nom || s.forfait}</Badge>
+                        {s.miseEnAvant && <span className="badge-sponsored">Sponsorisé</span>}
+                        {ab.offert && <Badge color="#7DC89A" bg="rgba(125,200,154,.15)">Offert · {ab.joursRestants}j</Badge>}
+                      </div>
+                      <p style={{ color: 'var(--text-dim)', fontSize: 14 }}>{s.ville} · {s.adresse}</p>
+                      <p style={{ color: 'var(--text-muted)', fontSize: 13 }}>{sRdv.length} RDV · {sAvis.length} avis · {s.barbiers?.length || 0} barbier(s) · {ab.prix} €/mois</p>
+                      <p style={{ color: 'var(--text-muted)', fontSize: 12, marginTop: 2 }}>
+                        <L icon="hourglass" size={12}>Prochain paiement : <strong style={{ color: 'var(--text-dim)' }}>{fmtDate(ab.prochain)}</strong> ({ab.joursRestants} j)</L>
+                      </p>
+                    </div>
+                    <div style={{ display: 'flex', gap: 6, alignItems: 'flex-start', flexWrap: 'wrap', alignContent: 'flex-start' }}>
+                      <select className="fi" value={s.forfait} onChange={e => changeForfait(s, e.target.value)} style={{ width: 'auto', padding: '6px 8px', fontSize: 13 }}>
+                        {Object.values(FORFAITS).map(f => <option key={f.id} value={f.id}>{f.nom}</option>)}
+                      </select>
+                      <button className="btn btn-o btn-sm" onClick={() => setGiftFor(s)}><L icon="gift" size={14}>Offrir</L></button>
+                      <button className="btn btn-o btn-sm" onClick={() => toggleSponsored(s)}>{s.miseEnAvant ? 'Retirer pub' : 'Mettre en avant'}</button>
+                      <button className="btn btn-o btn-sm" onClick={() => setDetail({ type: 'salon', data: s })}>Détails</button>
+                      <button className="btn btn-r btn-sm" onClick={() => deleteSalon(s.id)}><L icon="trash" size={13}>Suppr.</L></button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+            {!salons.length && <p style={{ color: 'var(--text-muted)', fontSize: 14 }}>Aucune entreprise inscrite.</p>}
+          </div>
+        </div>
+      )}
+
+      {/* ============ CLIENTS ============ */}
+      {tab === 'clients' && (
+        <div>
+          <input className="fi" placeholder="Rechercher un client…" value={query} onChange={e => setQuery(e.target.value)} style={{ marginBottom: 14 }} />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {clients.filter(c => filterFn(c.nom) || filterFn(c.telephone)).map(c => {
+              const cRdv = rdvs.filter(r => r.clientId === c.id);
+              return (
+                <div key={c.id} style={{ ...card, display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
+                  <div>
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 3 }}>
+                      <span style={{ fontWeight: 700 }}>{c.nom}</span>
+                      {(c.filleuls?.length > 0) && <Badge color="#C9AEF0" bg="rgba(156,123,208,.15)">{c.filleuls.length} parrainage(s)</Badge>}
+                    </div>
+                    <p style={{ color: 'var(--text-dim)', fontSize: 14 }}>{c.telephone || '—'} · Code {c.codeParrainage}</p>
+                    <p style={{ color: 'var(--text-muted)', fontSize: 13 }}>{cRdv.length} RDV · {(c.favoris?.length || 0)} favori(s){c.createdAt ? ` · inscrit le ${fmtDate(c.createdAt.split('T')[0])}` : ''}</p>
+                  </div>
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                    <button className="btn btn-o btn-sm" onClick={() => setDetail({ type: 'client', data: c })}>Détails</button>
+                    <button className="btn btn-r btn-sm" onClick={() => deleteClient(c.id)}><L icon="trash" size={13}>Suppr.</L></button>
+                  </div>
+                </div>
+              );
+            })}
+            {!clients.length && <p style={{ color: 'var(--text-muted)', fontSize: 14 }}>Aucun client inscrit.</p>}
+          </div>
+        </div>
+      )}
+
+      {/* ============ PAIEMENTS ============ */}
+      {tab === 'paiements' && (
+        <div>
+          <div style={{ ...card, marginBottom: 16, background: 'var(--brass-pale)', borderColor: 'var(--brass-dim)' }}>
+            <div style={{ fontSize: 13, color: 'var(--text-dim)' }}>Total à encaisser ce mois (abonnements)</div>
+            <div style={{ fontSize: 28, fontWeight: 700, color: 'var(--brass)', fontFamily: "'Fraunces',serif" }}>{mrr} €</div>
+          </div>
+
+          <h3 style={{ fontSize: 16, marginBottom: 10 }}><L icon="hourglass" size={17}>Prochaines échéances d'abonnement</L></h3>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 24 }}>
+            {salons.map(s => ({ s, ab: getAbonnement(s, salons) }))
+              .sort((a, b) => a.ab.prochain.localeCompare(b.ab.prochain))
+              .map(({ s, ab }) => (
+                <div key={s.id} style={{ ...card, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, padding: '10px 14px' }}>
+                  <div>
+                    <span style={{ fontWeight: 600 }}>{s.nom}</span>
+                    <span style={{ color: 'var(--text-muted)', fontSize: 13, marginLeft: 8 }}>{FORFAITS[s.forfait]?.nom}</span>
+                    {ab.offert && <Badge color="#7DC89A" bg="rgba(125,200,154,.15)">Offert</Badge>}
+                  </div>
+                  <div style={{ textAlign: 'right' }}>
+                    <div style={{ fontWeight: 700, color: ab.offert ? '#7DC89A' : 'var(--brass)' }}>{ab.offert ? 'Gratuit' : ab.prix + ' €'}</div>
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{fmtDate(ab.prochain)} · dans {ab.joursRestants} j</div>
+                  </div>
+                </div>
+              ))}
+            {!salons.length && <p style={{ color: 'var(--text-muted)', fontSize: 14 }}>Aucun abonnement.</p>}
+          </div>
+
+          <h3 style={{ fontSize: 16, marginBottom: 10 }}><L icon="calendar" size={17}>Prochains RDV payants (acomptes clients)</L></h3>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {rdvs.filter(r => r.statut !== 'annulé' && r.date >= today())
+              .sort((a, b) => (a.date + a.heure).localeCompare(b.date + b.heure))
+              .slice(0, 30)
+              .map(r => {
+                const s = salons.find(x => x.id === r.salonId);
+                return (
+                  <div key={r.id} style={{ ...card, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, padding: '10px 14px' }}>
+                    <div>
+                      <span style={{ fontWeight: 600 }}>{r.prestation}</span>
+                      <span style={{ color: 'var(--text-muted)', fontSize: 13, marginLeft: 8 }}>{s?.nom || '—'} · {r.clientNom}</span>
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ fontWeight: 700, color: 'var(--brass)' }}>{r.prix || 0} €</div>
+                      <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{fmtDate(r.date)} · {r.heure}</div>
+                    </div>
+                  </div>
+                );
+              })}
+            {!rdvs.filter(r => r.statut !== 'annulé' && r.date >= today()).length && <p style={{ color: 'var(--text-muted)', fontSize: 14 }}>Aucun RDV à venir.</p>}
+          </div>
+        </div>
+      )}
+
+      {/* ---- Modal jours offerts ---- */}
+      {giftFor && (
+        <Modal onClose={() => setGiftFor(null)} title={`Offrir des jours — ${giftFor.nom}`} width={440}>
+          {(() => { const ab = getAbonnement(giftFor, salons); return (
+            <p style={{ color: 'var(--text-dim)', fontSize: 14, marginBottom: 16 }}>
+              {ab.offert
+                ? <>Actuellement offert jusqu'au <strong>{fmtDate(ab.gratuitJusqu)}</strong>. Les jours s'ajoutent.</>
+                : <>Cette entreprise paie <strong>{ab.prix} €/mois</strong>. Offrez-lui une période gratuite.</>}
+            </p>
+          ); })()}
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 14 }}>
+            {[7, 14, 30, 90, 180, 365].map(n => (
+              <button key={n} className="btn btn-o" onClick={() => giveDays(giftFor, n)} style={{ flex: '1 0 28%' }}>{n} jours</button>
+            ))}
+          </div>
+          <GiftCustom onGive={n => giveDays(giftFor, n)} />
         </Modal>
       )}
+
+      {/* ---- Modal détails ---- */}
+      {detail && (
+        <Modal onClose={() => setDetail(null)} title={`Détails — ${detail.data.nom}`} width={620}>
+          <pre style={{ color: 'var(--text-dim)', fontSize: 12, whiteSpace: 'pre-wrap', wordBreak: 'break-all', margin: 0 }}>{JSON.stringify(detail.data, null, 2)}</pre>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+function GiftCustom({ onGive }) {
+  const [n, setN] = useState('');
+  return (
+    <div style={{ display: 'flex', gap: 8 }}>
+      <input className="fi" type="number" min="1" placeholder="Nombre de jours personnalisé" value={n} onChange={e => setN(e.target.value)} />
+      <button className="btn btn-b" onClick={() => { const v = parseInt(n, 10); if (v > 0) { onGive(v); setN(''); } }}>Offrir</button>
     </div>
   );
 }
